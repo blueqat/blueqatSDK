@@ -47,7 +47,6 @@ class Circuit:
             str(op) for op in self.ops)
 
     def __get_backend(self, backend_name):
-        # メソッドの先頭でインポートを追加！
         from blueqat.backends import BACKENDS
         
         try:
@@ -80,6 +79,8 @@ class Circuit:
             macro = update_wrapper(partial(GLOBAL_MACROS[name], self), GLOBAL_MACROS[name])
             return cast(CircuitOperation[Any], macro)
         if name.startswith("run_with_"):
+            # メソッド内部で遅延インポート
+            from blueqat.backends import BACKENDS
             backend_name = name[9:]
             if backend_name in BACKENDS:
                 return self.__backend_runner_wrapper(backend_name)
@@ -125,7 +126,6 @@ class Circuit:
 
     def run(self, backend: Optional[str] = None, *args, **kwargs) -> Any:
         """Run the circuit. Passes parameters to the PyTorch-based backend."""
-        # メソッドの最先頭でインポートして、NameError と循環インポートの両方を完璧に防ぐ！
         from blueqat.backends import BACKENDS, DEFAULT_BACKEND_NAME
         
         if backend is None:
@@ -137,6 +137,7 @@ class Circuit:
 
     def statevector(self, backend: 'BackendUnion' = None, **kwargs) -> torch.Tensor:
         """Run the circuit and get a statevector as a PyTorch Tensor to keep gradients intact."""
+        from blueqat.backends import DEFAULT_BACKEND_NAME
         if kwargs.get('returns'):
             raise ValueError('Circuit.statevector has no argument `returns`.')
         if backend is None:
@@ -150,6 +151,7 @@ class Circuit:
 
     def shots(self, shots: int, backend: 'BackendUnion' = None, **kwargs) -> typing.Counter[str]:
         """Run the circuit and get shot counts as a result."""
+        from blueqat.backends import DEFAULT_BACKEND_NAME
         if kwargs.get('returns'):
             raise ValueError('Circuit.shots has no argument `returns`.')
         if backend is None:
@@ -248,6 +250,7 @@ class BlueqatGlobalSetting:
     @staticmethod
     def register_backend(name: str, backend: Type['Backend'], allow_overwrite: bool = False) -> None:
         """Register new backend."""
+        from blueqat.backends import BACKENDS
         if hasattr(Circuit, "run_with_" + name):
             if allow_overwrite:
                 warnings.warn(f"Circuit has attribute `run_with_{name}`.")
@@ -260,6 +263,7 @@ class BlueqatGlobalSetting:
     @staticmethod
     def unregister_backend(name: str) -> None:
         """Unregister a backend."""
+        from blueqat.backends import BACKENDS
         if name not in BACKENDS:
             raise ValueError(f"Backend '{name}' is not registered.")
         del BACKENDS[name]
@@ -267,12 +271,15 @@ class BlueqatGlobalSetting:
     @staticmethod
     def set_default_backend(name: str) -> None:
         """Set the default backend to be used by `Circuit`."""
+        from blueqat.backends import BACKENDS
         if name not in BACKENDS:
             raise ValueError(f"Backend '{name}' is not registered.")
-        global DEFAULT_BACKEND_NAME
-        DEFAULT_BACKEND_NAME = name
+        # モジュール参照経由でグローバル変数を書き換える
+        import blueqat.backends
+        blueqat.backends.DEFAULT_BACKEND_NAME = name
 
     @staticmethod
     def get_default_backend_name() -> str:
         """Get the default backend name."""
+        from blueqat.backends import DEFAULT_BACKEND_NAME
         return DEFAULT_BACKEND_NAME

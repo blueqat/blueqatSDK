@@ -199,7 +199,8 @@ class Mat1Gate(OneQubitGate):
         return cls(targets, params[0])
 
     def dagger(self):
-        return Mat1Gate(self.targets, self.mat.mish().conj())
+        # mish() を .mT に修正し、テンソルの随伴行列を正しく取得
+        return Mat1Gate(self.targets, self.mat.mT.conj())
 
     def matrix(self):
         return self.mat
@@ -224,10 +225,13 @@ class PhaseGate(OneQubitGate):
 
     def matrix(self):
         theta = torch.as_tensor(self.theta, dtype=torch.complex128)
-        return torch.stack([
-            torch.stack([torch.tensor(1.0, dtype=torch.complex128), torch.tensor(0.0, dtype=torch.complex128)]),
-            torch.stack([torch.tensor(0.0, dtype=torch.complex128), torch.exp(1j * theta)])
+        elements = torch.stack([
+            torch.tensor(1.0, dtype=torch.complex128),
+            torch.tensor(0.0, dtype=torch.complex128),
+            torch.tensor(0.0, dtype=torch.complex128),
+            torch.exp(1j * theta)
         ])
+        return elements.reshape(2, 2)
 
 
 class RXGate(OneQubitGate):
@@ -249,9 +253,10 @@ class RXGate(OneQubitGate):
 
     def matrix(self):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
-        a = torch.cos(t)
-        b = -1j * torch.sin(t)
-        return torch.stack([torch.stack([a, b]), torch.stack([b, a])])
+        cos_t = torch.cos(t)
+        isin_t = -1j * torch.sin(t)
+        elements = torch.stack([cos_t, isin_t, isin_t, cos_t])
+        return elements.reshape(2, 2)
 
 
 class RYGate(OneQubitGate):
@@ -273,9 +278,10 @@ class RYGate(OneQubitGate):
 
     def matrix(self):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
-        a = torch.cos(t)
-        b = torch.sin(t)
-        return torch.stack([torch.stack([a, -b]), torch.stack([b, a])])
+        cos_t = torch.cos(t)
+        sin_t = torch.sin(t)
+        elements = torch.stack([cos_t, -sin_t, sin_t, cos_t])
+        return elements.reshape(2, 2)
 
 
 class RZGate(OneQubitGate):
@@ -300,7 +306,8 @@ class RZGate(OneQubitGate):
         a = torch.exp(-1j * t)
         b = torch.exp(1j * t)
         zero = torch.tensor(0.0, dtype=torch.complex128)
-        return torch.stack([torch.stack([a, zero]), torch.stack([zero, b])])
+        elements = torch.stack([a, zero, zero, b])
+        return elements.reshape(2, 2)
 
 
 class SGate(OneQubitGate, IFallbackOperation):
@@ -461,10 +468,13 @@ class UGate(OneQubitGate):
         cos_t = torch.cos(0.5 * t)
         sin_t = torch.sin(0.5 * t)
 
-        return torch.stack([
-            torch.stack([cos_t, -torch.exp(1j * l) * sin_t]),
-            torch.stack([torch.exp(1j * p) * sin_t, torch.exp(1j * (p + l)) * cos_t])
-        ]) * gphase
+        elements = torch.stack([
+            cos_t,
+            -torch.exp(1j * l) * sin_t,
+            torch.exp(1j * p) * sin_t,
+            torch.exp(1j * (p + l)) * cos_t
+        ])
+        return elements.reshape(2, 2) * gphase
 
 
 class XGate(OneQubitGate):
@@ -604,16 +614,18 @@ class CRXGate(TwoQubitGate):
 
     def matrix(self):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
-        a = torch.cos(t)
-        b = -1j * torch.sin(t)
+        cos_t = torch.cos(t)
+        isin_t = -1j * torch.sin(t)
         zero = torch.tensor(0.0, dtype=torch.complex128)
         one = torch.tensor(1.0, dtype=torch.complex128)
-        return torch.stack([
-            torch.stack([one, zero, zero, zero]),
-            torch.stack([zero, a, zero, b]),
-            torch.stack([zero, zero, one, zero]),
-            torch.stack([zero, b, zero, a])
+        
+        elements = torch.stack([
+            one, zero, zero, zero,
+            zero, cos_t, zero, isin_t,
+            zero, zero, one, zero,
+            zero, isin_t, zero, cos_t
         ])
+        return elements.reshape(4, 4)
 
 
 class CRYGate(TwoQubitGate):
@@ -633,16 +645,18 @@ class CRYGate(TwoQubitGate):
 
     def matrix(self):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
-        a = torch.cos(t)
-        b = torch.sin(t)
+        cos_t = torch.cos(t)
+        sin_t = torch.sin(t)
         zero = torch.tensor(0.0, dtype=torch.complex128)
         one = torch.tensor(1.0, dtype=torch.complex128)
-        return torch.stack([
-            torch.stack([one, zero, zero, zero]),
-            torch.stack([zero, a, zero, -b]),
-            torch.stack([zero, zero, one, zero]),
-            torch.stack([zero, b, zero, a])
+        
+        elements = torch.stack([
+            one, zero, zero, zero,
+            zero, cos_t, zero, -sin_t,
+            zero, zero, one, zero,
+            zero, sin_t, zero, cos_t
         ])
+        return elements.reshape(4, 4)
 
 
 class CRZGate(TwoQubitGate):
@@ -727,12 +741,13 @@ class CUGate(TwoQubitGate):
         zero = torch.tensor(0.0, dtype=torch.complex128)
         one = torch.tensor(1.0, dtype=torch.complex128)
 
-        return torch.stack([
-            torch.stack([one, zero, zero, zero]),
-            torch.stack([zero, torch.exp(1j * g) * cos_t, zero, -torch.exp(1j * (g + l)) * sin_t]),
-            torch.stack([zero, zero, one, zero]),
-            torch.stack([zero, torch.exp(1j * (g + p)) * sin_t, zero, torch.exp(1j * (g + p + l)) * cos_t])
+        elements = torch.stack([
+            one, zero, zero, zero,
+            zero, torch.exp(1j * g) * cos_t, zero, -torch.exp(1j * (g + l)) * sin_t,
+            zero, zero, one, zero,
+            zero, torch.exp(1j * (g + p)) * sin_t, zero, torch.exp(1j * (g + p + l)) * cos_t
         ])
+        return elements.reshape(4, 4)
 
 
 class CXGate(TwoQubitGate):
@@ -812,14 +827,17 @@ class RXXGate(TwoQubitGate):
 
     def matrix(self):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
-        a = torch.cos(t)
-        b = -1j * torch.sin(t)
-        return torch.stack([
-            torch.stack([a, torch.tensor(0.0, dtype=torch.complex128), torch.tensor(0.0, dtype=torch.complex128), b]),
-            torch.stack([torch.tensor(0.0, dtype=torch.complex128), a, b, torch.tensor(0.0, dtype=torch.complex128)]),
-            torch.stack([torch.tensor(0.0, dtype=torch.complex128), b, a, torch.tensor(0.0, dtype=torch.complex128)]),
-            torch.stack([b, torch.tensor(0.0, dtype=torch.complex128), torch.tensor(0.0, dtype=torch.complex128), a])
+        cos_t = torch.cos(t)
+        isin_t = -1j * torch.sin(t)
+        zero = torch.tensor(0.0, dtype=torch.complex128)
+        
+        elements = torch.stack([
+            cos_t, zero, zero, isin_t,
+            zero, cos_t, isin_t, zero,
+            zero, isin_t, cos_t, zero,
+            isin_t, zero, zero, cos_t
         ])
+        return elements.reshape(4, 4)
 
 
 class RYYGate(TwoQubitGate):
@@ -839,14 +857,17 @@ class RYYGate(TwoQubitGate):
 
     def matrix(self):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
-        a = torch.cos(t)
-        b = 1j * torch.sin(t)
-        return torch.stack([
-            torch.stack([a, torch.tensor(0.0, dtype=torch.complex128), torch.tensor(0.0, dtype=torch.complex128), b]),
-            torch.stack([torch.tensor(0.0, dtype=torch.complex128), a, -b, torch.tensor(0.0, dtype=torch.complex128)]),
-            torch.stack([torch.tensor(0.0, dtype=torch.complex128), -b, a, torch.tensor(0.0, dtype=torch.complex128)]),
-            torch.stack([b, torch.tensor(0.0, dtype=torch.complex128), torch.tensor(0.0, dtype=torch.complex128), a])
+        cos_t = torch.cos(t)
+        isin_t = 1j * torch.sin(t)
+        zero = torch.tensor(0.0, dtype=torch.complex128)
+        
+        elements = torch.stack([
+            cos_t, zero, zero, isin_t,
+            zero, cos_t, -isin_t, zero,
+            zero, -isin_t, cos_t, zero,
+            isin_t, zero, zero, cos_t
         ])
+        return elements.reshape(4, 4)
 
 
 class RZZGate(TwoQubitGate):
