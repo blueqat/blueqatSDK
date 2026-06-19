@@ -1,26 +1,47 @@
-from .numpy_backend import NumPyBackend
-from .numba_backend import numba_backend_lazy
-from .qasm_output_backend import QasmOutputBackend
-from .ibmq_backend import ibmq_backend
-from .sympy_backend import SympyBackend
-from .onequbitgate_transpiler import OneQubitGateCompactionTranspiler
-from .twoqubitgate_transpiler import TwoQubitGateDecomposingTranspiler
-from .draw_backend import DrawCircuit
-from .quimb import Quimb
-from .cusv import cuSV
-from .cutn import cuTN
+# Copyright 2019-2026 The Blueqat Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Backend modules registry for Blueqat.
 
-BACKENDS = {
-    "numpy": NumPyBackend,
-    "numba": numba_backend_lazy,
-    "qasm_output": QasmOutputBackend,
-    "ibmq": ibmq_backend,
-    "sympy_unitary": SympyBackend,
-    "2q_decomposition": TwoQubitGateDecomposingTranspiler,
+This package manages execution engines, centering around the high-performance
+PyTorch-based statevector and tensor network simulator.
+"""
+
+from typing import Any, Dict
+
+# Jupyterなど外部からの呼び出しでも絶対に迷子にならないよう絶対インポートに統一
+from blueqat.backends.backendbase import Backend, get_backend, register_backend
+from blueqat.backends.torch_backend import TorchBackend
+from blueqat.backends.draw_backend import DrawCircuit
+from blueqat.backends.onequbitgate_transpiler import OneQubitGateCompactionTranspiler
+from blueqat.backends.twoqubitgate_transpiler import TwoQubitGateDecomposingTranspiler
+
+# 2026年新生Blueqatのコアバックエンドマップ
+BACKENDS: Dict[str, Any] = {
+    # 状態ベクトルモード (デフォルト)
+    "torch": lambda: TorchBackend(mode="statevector"),
+    "statevector": lambda: TorchBackend(mode="statevector"),
+    
+    # テンソルネットワークモード (Pure PyTorch / torch.einsum)
+    "tensornet": lambda: TorchBackend(mode="tensornet"),
+    
+    # コンパイル & トランスパイラ
     "1q_compaction": OneQubitGateCompactionTranspiler,
+    "2q_decomposition": TwoQubitGateDecomposingTranspiler,
+    
+    # ユーティリティ
     "draw": DrawCircuit,
-    "quimb": Quimb,
-    "cusv": cuSV,
-    "cutn": cuTN,
 }
-DEFAULT_BACKEND_NAME = "quimb"
+
+# デフォルトバックエンドを純PyTorch状態ベクトルに設定
+DEFAULT_BACKEND_NAME: str = "statevector"

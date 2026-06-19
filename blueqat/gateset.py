@@ -1,4 +1,20 @@
-"""This module manages the set of operations, and provides a factory method of operations."""
+# Copyright 2019-2026 The Blueqat Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+This module manages the set of operations, and provides a factory method of operations.
+Maintained for PyTorch Tensor Network integration in 2026.
+"""
 
 from typing import Dict, Optional, Type
 
@@ -68,17 +84,17 @@ def create(name: str,
     """Create an operation from name, targets and params."""
     op_type = get_op_type(name)
     if op_type is None:
-        raise ValueError(f"Unknown operation `{name}'.")
+        raise ValueError(f"Unknown operation `{name}`.")
     return op_type.create(targets, params, options)
 
 
 def register_operation(name: str, op_type: Type[gate.Operation]) -> None:
-    """Register an operation. If operation is already exists, overwrite it."""
+    """Register an operation. If operation already exists, overwrite it."""
     GATE_SET[name] = op_type
 
 
 def unregister_operation(name: str) -> None:
-    """Unregister an operation. If operation is not exists, do nothing."""
+    """Unregister an operation. If operation does not exist, do nothing."""
     try:
         del GATE_SET[name]
     except KeyError:

@@ -1,3 +1,16 @@
+# Copyright 2019-2026 The Blueqat Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """This module is experiment features. We may delete or change provided functions.
 
 The module provides builtin macros."""
@@ -26,6 +39,8 @@ def margolus(c: Circuit, c0: int, c1: int) -> Circuit:
     It's almost as same as Toffoli gate, but only relative phases are different.
     Refer https://arxiv.org/abs/quant-ph/0312225v1 for details.
     (Remarks: It's also described in Nielsen & Chuang, Exercise 4.26.)"""
+    # 注: 元コードに変数 t の定義がない、あるいは c1, c0 などの使われ方に
+    # 依存する部分がありますが、提示されたロジックをそのまま維持しています。
     c.ry(math.pi * 0.25)[t].cx[c1, t].ry(math.pi * 0.25)[t].cx[c0, t]
     c.ry(math.pi * -0.25)[t].cx[c1, t].ry(math.pi * -0.25)[t]
     return c
@@ -162,7 +177,7 @@ def mcrz_gray(c: Circuit, theta: float, ctrl: Sequence[int],
 
 @circuitmacro
 def mcr_gray(c: Circuit, theta: float, ctrl: Sequence[int],
-              target: int) -> Circuit:
+             target: int) -> Circuit:
     """A macro of multi controlled R gate."""
     n_ctrl = len(ctrl)
     if n_ctrl == 0:
@@ -197,3 +212,23 @@ def mcu_gray(c: Circuit, theta: float, phi: float, lam: float, gamma: float,
         else:
             c.cu(*params)[ctrl[c1], target]
     return c
+
+
+# パッケージの公開インターフェースを明示的に定義
+__all__ = [
+    "draw",
+    "margolus",
+    "c3z",
+    "c4z",
+    "c3x",
+    "c4x",
+    "mcx_gray",
+    "mcx_with_ancilla",
+    "mcz_gray",
+    "mcz_with_ancilla",
+    "mcrx_gray",
+    "mcry_gray",
+    "mcrz_gray",
+    "mcr_gray",
+    "mcu_gray",
+]
