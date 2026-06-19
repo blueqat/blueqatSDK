@@ -1,4 +1,4 @@
-# Copyright 2019 The Blueqat Developers
+# Copyright 2019-2026 The Blueqat Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,102 +11,48 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
-`gate` module implements quantum gate operations.
-This module is internally used.
-"""
+"""Base class and plugin registration system for Blueqat backends."""
 
-import copy
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Type
+from ..gate import Operation
 
-from ..gate import Operation, IFallbackOperation
+# グローバルなバックエンド登録レジストリ
+_BACKEND_REGISTRY: Dict[str, Type['Backend']] = {}
 
 
-class Backend:
-    """Abstract quantum gate processor backend class."""
-    def copy(self) -> "Backend":
-        """Returns (deep)copy of Backend.
+class Backend(ABC):
+    """Abstract base class for all Blueqat simulation and compilation backends."""
 
-        Backend developer must support `copy` method.
-        If required, the developer can override this method.
-        """
-        return copy.deepcopy(self)
+    @abstractmethod
+    def run(self, gates: List[Operation], n_qubits: int, *args: Any, **kwargs: Any) -> Any:
+        """Execute the quantum circuit represented by a list of gates."""
+        pass
 
-    def _preprocess_run(self, gates: List[Operation], n_qubits: int,
-                        args: Tuple[Any], kwargs: Dict[Any, Any]) -> Any:
-        """Preprocess of backend run.
-        Backend developer can override this function.
-        """
-        return gates, None
 
-    def _postprocess_run(self, ctx: Any) -> Any:
-        """Postprocess of backend run
-        Backend developer can override this function.
-        """
-        return None
+def register_backend(name: str, backend_cls: Type[Backend], overwrite: bool = False) -> None:
+    """Register a new backend plugin dynamically.
+    
+    This allows external packages (like a quimb or cuQuantum connector) 
+    to register themselves into Blueqat at runtime.
+    """
+    global _BACKEND_REGISTRY
+    if name in _BACKEND_REGISTRY and not overwrite:
+        raise ValueError(f"Backend '{name}' is already registered. Set `overwrite=True` to replace it.")
+    _BACKEND_REGISTRY[name] = backend_cls
 
-    def _run_gates(self, gates: List[Operation], n_qubits: int,
-                   ctx: Any) -> Any:
-        """Iterate gates and call backend's action for each gates"""
-        for gate in gates:
-            action = self._get_action(gate)
-            if action is not None:
-                ctx = action(gate, ctx)
-            elif isinstance(gate, IFallbackOperation):
-                ctx = self._run_gates(gate.fallback(n_qubits), n_qubits, ctx)
-            else:
-                raise ValueError(f"Cannot run {gate.lowername} operation on this backend")
-        return ctx
 
-    def _run(self, gates: List[Operation], n_qubits: int, args: Tuple[Any],
-             kwargs: Dict[Any, Any]) -> Any:
-        """Default implementation of `Backend.run`.
-        Backend developer shouldn't override this function, but override `run` instead of this.
-
-        The default flow of running is:
-            1. preprocessing
-            2. call the gate action which defined in backend
-            3. postprocessing
-
-        Backend developer can:
-            1. Define preprocessing process. Override `_preprocess_run`
-            2. Define the gate action. Define methods `gate_{gate.lowername}`,
-               for example, `gate_x` for X gate, `gate_cx` for CX gate.
-            3. Define postprocessing process (and make return value). Override `_postprocess_run`
-        Otherwise, the developer can override `run` method if they want to change the flow of run.
-        """
-        gates, ctx = self._preprocess_run(gates, n_qubits, args, kwargs)
-        self._run_gates(gates, n_qubits, ctx)
-        return self._postprocess_run(ctx)
-
-    def make_cache(self, gates: List[Operation], n_qubits: int):
-        """Make internal cache to reduce the time of running the circuit.
-
-        Some backends may implement this method. Otherwise, this method do nothing.
-        This is a temporary API and may changed or deprecated in future."""
-        return None
-
-    def run(self, gates: List[Operation], n_qubits: int, *args, **kwargs):
-        """Run the backend."""
-        return self._run(gates, n_qubits, args, kwargs)
-
-    def _get_action(self, gate: Operation) -> Optional[Callable]:
-        try:
-            return getattr(self, "gate_" + gate.lowername)
-        except AttributeError:
-            return None
-
-    def _has_action(self, gate: Operation) -> bool:
-        return hasattr(self, "gate_" + gate.lowername)
-
-    def _resolve_fallback(self, gates: Operation,
-                          n_qubits: int) -> List[Operation]:
-        """Resolve fallbacks and flatten gates."""
-        flattened = []
-        for g in gates:
-            if self._has_action(g):
-                flattened.append(g)
-            else:
-                flattened += self._resolve_fallback(g.fallback(n_qubits),
-                                                    n_qubits)
-        return flattened
+def get_backend(name: str) -> Backend:
+    """Retrieve an instance of the registered backend by name."""
+    global _BACKEND_REGISTRY
+    if name not in _BACKEND_REGISTRY:
+        # 遅延インポートによる依存性の分離（デフォルトのTorch backend）
+        if name in ("torch", "statevector", "tensornet"):
+            from .torch_backend import TorchBackend
+            return TorchBackend(mode="statevector" if name != "tensornet" else "tensornet")
+        
+        raise ValueError(
+            f"Backend '{name}' is not registered. "
+            f"If it's an external plugin (e.g., quimb, cusv), make sure to import its connector file first."
+        )
+    return _BACKEND_REGISTRY[name]()
