@@ -1,5 +1,3 @@
-![Logo](https://raw.githubusercontent.com/Blueqat/Blueqat/master/blueqat_logo_blue.png)
-
 # blueqat
 A Quantum Computing SDK
 
@@ -199,8 +197,6 @@ else:
 ### Document
 https://blueqat.readthedocs.io/en/latest/
 
-### Contributors
-[Contributors](https://github.com/Blueqat/Blueqat/graphs/contributors)
 
 ### Disclaimer
-Copyright 2022 The Blueqat Developers.
+Copyright 2026 The blueqat Developers.
