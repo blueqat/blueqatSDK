@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blueqat"
+dynamic = ["version"]  # _version.py から動的に取得するため dynamic に指定します
+description = "Quantum Computer Library for Everyone"
+readme = "README.md"
+authors = [
+    { name = "The Blueqat Developers", email = "info@blueqat.com" }
+]
+license = { text = "Apache 2" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 3 - Alpha",
+]
+# 👇 requirements.txt の中身をここに集約
+dependencies = [
+    "numpy>=1.21.0",
+    "scipy>=1.5",
+    "networkx>=2.6.3",
+    "matplotlib>=3.5.1",
+    "autoray>=0.2.5",
+    "quimb==1.4.0",
+    "opt-einsum>=3.3.0",
+]
+
+# 👇 dev と optional-requirements.txt の中身をここに集約
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",   # 古い3.6から、モダンなpytestに
+    "sympy>=1.12",     # Python 3.12~3.14に対応させるため
+    "qiskit>=1.0.0",   # 完全に新しくなったQiskit 1.0以降を指定
+]
+optional = [
+    "qiskit>=1.0.0",   # dev側と統一
+    "sympy>=1.12",     # dev側と統一
+    "numba>=0.59.0",   # 新しいPython対応のため
+]
+
+[project.urls]
+Homepage = "https://github.com/Blueqat/Blueqat"
+
+# 👇 setup.py で行っていた「_version.py からバージョンを読み込む」ための設定
+[tool.setuptools.dynamic]
+version = { attr = "blueqat._version.__version__" }
+
+[tool.setuptools]
+packages = ["blueqat"] # 自動検出でも動きますが明示しておくと安全です

@@ -1,3 +1,0 @@
-qiskit>=0.15.0
-sympy>=1.8
-numba>=0.53.1
