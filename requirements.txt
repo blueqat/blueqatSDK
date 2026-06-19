@@ -1,7 +1,0 @@
-numpy>=1.21.0
-scipy>=1.5
-networkx>=2.6.3
-matplotlib>=3.5.1
-autoray>=0.2.5
-quimb==1.4.0
-opt-einsum>=3.3.0
