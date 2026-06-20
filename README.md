@@ -12,15 +12,15 @@ The back end has been changed to tensor network. The previous backend environmen
 
 ### Install
 ```
-git clone https://github.com/Blueqat/Blueqat
-cd Blueqat
-pip3 install -e .
+git clone https://github.com/blueqat/blueqatSDK
+cd blueqatSDK
+pip install -e .
 ```
 
 or
 
 ```
-pip3 install blueqat
+pip install blueqat
 ```
 
 ### Circuit
@@ -66,8 +66,8 @@ Circuit(50).h[:].run()
 
 ### Run(shots=n)
 ```python
-Circuit(100).x[:].run(shots=100)
-# => Counter({'1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111': 100})
+Circuit(100).x[:].run(shots=1)
+# => Counter({'1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111': 1})
 ```
 
 ### Single Amplitude
@@ -151,47 +151,7 @@ step = 1
 result = qaoa(hamiltonian, step)
 result.circuit.run(shots=100)
     
-# => Counter({'01': 99, '11': 1})
-```
-
-
-### Circuit Drawing Backend
-```python
-from blueqat import vqe
-from blueqat.pauli import *
-from blueqat.pauli import qubo_bit as q
-
-#hamiltonian = q(0)-3*q(1)+2*q(0)*q(1)+3*q(2)*q(3)+q(4)*q(7)
-hamiltonian = Z[0]-3*Z[1]+2*Z[0]*Z[1]+3*Z[2]*Z[3]+Z[4]
-step = 8
-
-result = vqe.Vqe(vqe.QaoaAnsatz(hamiltonian, step)).run()
-result.circuit.run(backend='draw')
-```
-
-![draw](https://raw.githubusercontent.com/Blueqat/Blueqat/master/draw.png)
-
-### Cloud System Connection (API Key is required)
-```python
-from bqcloud import register_api
-api = register_api("Your API Key")
-
-from bqcloud import load_api
-api = load_api()
-
-from blueqat import Circuit
-from bqcloud import Device
-
-task = api.execute(Circuit().h[0].cx[0, 1], Device.IonQDevice, 10)
-#task = api.execute(Circuit().h[0].cx[0, 1], Device.AspenM1, 10)
-
-# Wait 10 sec. If complete, result is returned, otherwise, None is returned.
-result = task.wait(timeout=10)
-
-if result:
-    print(result.shots())
-else:
-    print("timeout")
+# => Counter({'10': 100})
 ```
 
 ### Document
