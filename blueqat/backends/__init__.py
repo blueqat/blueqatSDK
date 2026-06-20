@@ -44,4 +44,4 @@ BACKENDS: Dict[str, Any] = {
 }
 
 # デフォルトバックエンドを純PyTorch状態ベクトルに設定
-DEFAULT_BACKEND_NAME: str = "statevector"
+DEFAULT_BACKEND_NAME: str = "tensornet"
