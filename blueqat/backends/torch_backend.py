@@ -78,6 +78,17 @@ class TorchBackend(Backend):
             's': lambda dev, dt: torch.tensor([[1.+0.j, 0.+0.j], [0.+0.j, 1.j]], dtype=dt, device=dev),
             'cx': lambda dev, dt: torch.tensor([[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]], dtype=dt, device=dev).view(2,2,2,2),
             'cz': lambda dev, dt: torch.tensor([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,-1]], dtype=dt, device=dev).view(2,2,2,2),
+            
+            # 💡 【追加】SWAPゲートの4x4行列定義を2x2x2x2テンソルとして追加
+            'swap': lambda dev, dt: torch.tensor([[1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]], dtype=dt, device=dev).view(2,2,2,2),
+            
+            # 💡 CRZゲート(動的関数)
+            'crz': lambda dev, dt: lambda gate: (lambda theta=torch.as_tensor(getattr(gate, 'theta', 0.0), dtype=torch.float64, device=dev): torch.tensor([
+                [1.0+0.0j, 0.0+0.0j, 0.0+0.0j, 0.0+0.0j],
+                [0.0+0.0j, 1.0+0.0j, 0.0+0.0j, 0.0+0.0j],
+                [0.0+0.0j, 0.0+0.0j, torch.exp(-1j * theta * 0.5), 0.0+0.0j],
+                [0.0+0.0j, 0.0+0.0j, 0.0+0.0j, torch.exp(1j * theta * 0.5)]
+            ], dtype=dt, device=dev).view(2, 2, 2, 2))()
         }
 
     def _run_inner(self, ctx: TorchBackendContext, gates: List[Operation], n_qubits: int) -> TorchBackendContext:
@@ -157,6 +168,13 @@ class TorchBackend(Backend):
         elif name == 'cz':
             for c, t in gate.control_target_iter(ctx.n_qubits):
                 q = torch.where(((idxs & (1 << c)) != 0) & ((idxs & (1 << t)) != 0), q * -1, q)
+        elif name == 'swap':
+            for c, t in gate.control_target_iter(ctx.n_qubits):
+                nq = q.clone()
+                c0, c1 = (idxs & (1 << c)) == 0, (idxs & (1 << c)) != 0
+                t0, t1 = (idxs & (1 << t)) == 0, (idxs & (1 << t)) != 0
+                nq[c1 & t0], nq[c0 & t1] = q[c0 & t1], q[c1 & t0]
+                q, nq = nq, q
         elif isinstance(gate, IFallbackOperation):
             for sub_gate in gate.fallback(ctx.n_qubits):
                 ctx.state, ctx.buf = q, nq
@@ -169,7 +187,7 @@ class TorchBackend(Backend):
     def _apply_tensornet_gate(self, ctx: TorchBackendContext, gate: Operation) -> TorchBackendContext:
         name = gate.lowername
         
-        if name in ('rx', 'ry', 'rz'):
+        if name in ('rx', 'ry', 'rz', 'phase'):
             float_dt = torch.float64 if ctx.dtype == torch.complex128 else torch.float32
             theta = torch.as_tensor(getattr(gate, 'theta', 0.0), dtype=float_dt, device=ctx.device)
             if name == 'rx':
@@ -178,11 +196,21 @@ class TorchBackend(Backend):
             elif name == 'ry':
                 mat = torch.stack([torch.stack([torch.cos(theta*0.5).to(ctx.dtype), (-torch.sin(theta*0.5)).to(ctx.dtype)]),
                                    torch.stack([torch.sin(theta*0.5).to(ctx.dtype), torch.cos(theta*0.5).to(ctx.dtype)])])
-            else:
+            elif name == 'rz':
                 mat = torch.stack([torch.stack([torch.exp(-1j*theta*0.5).to(ctx.dtype), torch.zeros_like(theta).to(ctx.dtype)]),
                                    torch.stack([torch.zeros_like(theta).to(ctx.dtype), torch.exp(1j*theta*0.5).to(ctx.dtype)])])
+            elif name == 'phase':
+                mat = torch.zeros((2, 2), dtype=ctx.dtype, device=ctx.device)
+                mat[0, 0] = 1.0 + 0.0j
+                mat[1, 1] = torch.exp(1j * theta).to(ctx.dtype)
+                
         elif name in self._gate_matrices:
-            mat = self._gate_matrices[name](ctx.device, ctx.dtype)
+            mat_or_func = self._gate_matrices[name](ctx.device, ctx.dtype)
+            if callable(mat_or_func):
+                mat = mat_or_func(gate)
+            else:
+                mat = mat_or_func
+                
         elif isinstance(gate, IFallbackOperation):
             for sub_gate in gate.fallback(ctx.n_qubits):
                 ctx = self._apply_tensornet_gate(ctx, sub_gate)
@@ -200,6 +228,7 @@ class TorchBackend(Backend):
                 ctx.tensor_indices.append([new_axis, old_axis])
                 ctx.current_qubit_axis[t] = new_axis
         else:
+            # 💡 cx, cz, swap, crz などの2量子ビット演算
             for c, t in gate.control_target_iter(ctx.n_qubits):
                 old_c_axis = ctx.current_qubit_axis[c]
                 old_t_axis = ctx.current_qubit_axis[t]
@@ -253,7 +282,6 @@ class TorchBackend(Backend):
         if ctx.mode == "statevector":
             flattened_state = ctx.state
         else:
-            # 💡 28量子ビットを超える巨大回路で全状態ベクトルを展開しようとしたら即座にインターセプト
             if n_qubits > 28 and shots is None:
                 raise MemoryError(f"量子ビット数({n_qubits})が大きすぎるため、全状態ベクトルを展開できません。マクロな回路では returns='amplitude' または shots を指定してください。")
             
@@ -303,35 +331,26 @@ class TorchBackend(Backend):
                 shots_result[format(idx, fmt)] += 1
             return shots_result
         else:
-            # 🚀 状態ベクトルを一切作らずに、1ショットずつ条件付き確率に沿ってビットを決定
-            # これにより100量子ビットの独立回路、もつれ回路ともに安全にサンプリングが通ります
             with torch.no_grad():
                 for shot in range(n_shots):
                     bit_string = []
-                    # 縮約のために現在のネットワーク状態を複製
                     active_tensors = list(ctx.tensors)
                     active_indices = [list(idxs) for idxs in ctx.tensor_indices]
                     active_qubit_axis = list(ctx.current_qubit_axis)
                     
-                    # Blueqatのビッグエンディアン（q0が一番左）の順に1ビットずつ確定させる
                     for i in range(n_qubits):
-                        # q_i を |0> に射影したときのネットワーク全体のノルム（確率）をテスト
                         test_tensors = list(active_tensors)
                         test_indices = [list(id_list) for id_list in active_indices]
                         
-                        # 未確定の他の量子ビット（i+1〜n_qubits-1）にはトレース（全和）用キャップを被せる
-                        # トレースベクトルは全要素が1のベクトル [1.0, 1.0]
                         for j in range(i + 1, n_qubits):
                             trace_vec = torch.ones(2, dtype=target_dtype, device=device)
                             test_tensors.append(trace_vec)
                             test_indices.append([active_qubit_axis[j]])
                             
-                        # テスト対象の q_i に |0> 射影ベクトルを結合
                         proj_zero = torch.tensor([1.0, 0.0], dtype=target_dtype, device=device)
                         test_tensors.append(proj_zero)
                         test_indices.append([active_qubit_axis[i]])
                         
-                        # スカラーへの縮約実行
                         contract_args = []
                         for t, idxs in zip(test_tensors, test_indices):
                             contract_args.append(t)
@@ -341,10 +360,7 @@ class TorchBackend(Backend):
                         val_zero = oe.contract(*contract_args, backend="torch")
                         prob_zero = torch.abs(val_zero).item() ** 2
                         
-                        # 確定ビットの選択
-                        # 確率判定（すべて1になる自明な回路や、中間状態に合わせた厳密確率判定）
                         if prob_zero > 0.0 or bit_string.count("0") == i: 
-                            # 単純な独立回路（Xゲートなど）で、|0> の確率がほぼ0なら確実に '1' を選ぶ
                             if prob_zero < 1e-10 and bit_string.count("0") == 0:
                                 chosen_bit = 1
                             else:
@@ -354,7 +370,6 @@ class TorchBackend(Backend):
                             
                         bit_string.append(str(chosen_bit))
                         
-                        # 決定したビットに対応する射影ベクトルを本番の active_tensors に恒久結合してネットワークを固定
                         fixed_vec = torch.zeros(2, dtype=target_dtype, device=device)
                         fixed_vec[chosen_bit] = 1.0
                         active_tensors.append(fixed_vec)
