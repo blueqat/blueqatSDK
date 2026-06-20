@@ -1,26 +1,14 @@
 # blueqat
 A Quantum Computing SDK
 
-### Version
-[![Version](https://badge.fury.io/py/blueqat.svg)](https://badge.fury.io/py/blueqat)
-
 ### Tutorial
 https://github.com/Blueqat/Blueqat-tutorials
-
-### Notice
-The back end has been changed to tensor network. The previous backend environment can still be used with .run(backend="numpy").
 
 ### Install
 ```
 git clone https://github.com/blueqat/blueqatSDK
 cd blueqatSDK
 pip install -e .
-```
-
-or
-
-```
-pip install blueqat
 ```
 
 ### Circuit
