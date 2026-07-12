@@ -681,11 +681,17 @@ class Vqe:
         self.optimizer_kwargs = optimizer_kwargs or {"lr": 0.05}
         self.sampler = sampler
 
-    def run(self, max_iter: int = 500, tol: float = 1e-6, verbose: bool = False, device: Optional[torch.device] = None) -> VqeResult:
+    def run(self, max_iter: int = 500, tol: float = 1e-6, verbose: bool = False, device: Optional[torch.device] = None,
+            initial_params: Optional[torch.Tensor] = None) -> VqeResult:
         if device is None: device = torch.device('cpu')
         objective_fn = self.ansatz.get_objective(self.sampler, device=device)
-        
-        params = torch.rand(self.ansatz.n_params, dtype=torch.float64, device=device, requires_grad=True)
+
+        if initial_params is None:
+            params = torch.rand(self.ansatz.n_params, dtype=torch.float64, device=device, requires_grad=True)
+        else:
+            params = torch.as_tensor(initial_params, dtype=torch.float64, device=device).clone().detach().requires_grad_(True)
+            if params.shape != (self.ansatz.n_params,):
+                raise ValueError(f"initial_params must have shape ({self.ansatz.n_params},), got {tuple(params.shape)}")
         optimizer = self.optimizer_cls([params], **self.optimizer_kwargs)
         
         for idx in range(max_iter):
