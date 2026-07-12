@@ -680,11 +680,18 @@ class Vqe:
         self.optimizer_cls = optimizer_cls
         self.optimizer_kwargs = optimizer_kwargs or {"lr": 0.05}
         self.sampler = sampler
+        self.sampler_call_count = 0
 
     def run(self, max_iter: int = 500, tol: float = 1e-6, verbose: bool = False, device: Optional[torch.device] = None,
             initial_params: Optional[torch.Tensor] = None) -> VqeResult:
         if device is None: device = torch.device('cpu')
-        objective_fn = self.ansatz.get_objective(self.sampler, device=device)
+        self.sampler_call_count = 0
+        counting_sampler = None
+        if self.sampler is not None:
+            def counting_sampler(circuit: Circuit, meas: typing.Iterable[int]) -> Dict[Tuple[int, ...], float]:
+                self.sampler_call_count += 1
+                return self.sampler(circuit, meas)
+        objective_fn = self.ansatz.get_objective(counting_sampler, device=device)
 
         if initial_params is None:
             params = torch.rand(self.ansatz.n_params, dtype=torch.float64, device=device, requires_grad=True)
