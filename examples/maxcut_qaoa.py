@@ -1,56 +1,43 @@
-import os
-import sys
-import torch
+"""Max-Cut optimization via QAOA.
 
-# 1. 自作SDKの探索パスを設定
-SDK_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if SDK_ROOT not in sys.path:
-    sys.path.insert(0, SDK_ROOT)
+Given a graph, Max-Cut asks for a 2-coloring of its vertices that maximizes
+the number of edges crossing between the two colors. Encoding "vertex i and j
+have different colors" as minimizing <Z_i Z_j> gives a natural QAOA cost
+Hamiltonian: H = sum over edges (i, j) of Z_i * Z_j.
+"""
+from typing import Callable, List, Optional, Tuple
 
-from blueqat import pauli, vqe
-from blueqat.backends.torch_backend import TorchBackend
+from blueqat.utils import Vqe, QaoaAnsatz, Z
 
-def maxcut_qaoa(n_step, edges, sampler=None):
-    """Setup Modern QAOA for Max-Cut problem using PyTorch VQE.
 
-    :param n_step: QAOAのステップ数
-    :param edges: グラフの辺リスト
-    :returns Vqe オブジェクト
+def maxcut_qaoa(n_step: int, edges: List[Tuple[int, int]],
+                sampler: Optional[Callable] = None) -> Vqe:
+    """Build a Vqe runner for the Max-Cut problem on the given graph.
+
+    :param n_step: Number of QAOA layers (p).
+    :param edges: List of (i, j) edges of the graph.
+    :param sampler: Optional custom sampler, passed through to Vqe.
+    :returns: A Vqe instance, ready to call `.run()` on.
     """
-    # ハミルトニアンの初期化
-    hamiltonian = pauli.I() * 0
-
-    # Max-Cut問題の定式化: 隣り合う頂点が「異なる状態」のときにエネルギーが下がるように設計
+    hamiltonian = 0
     for i, j in edges:
-        hamiltonian += pauli.Z(i) * pauli.Z(j)
+        hamiltonian = hamiltonian + Z[i] * Z[j]
 
-    hamiltonian = hamiltonian.simplify()
+    ansatz = QaoaAnsatz(hamiltonian, n_step)
+    return Vqe(ansatz, sampler=sampler)
 
-    # 💡 2026年最新仕様: 引数は ansatz と sampler のみでシンプルに構築
-    ansatz = vqe.QaoaAnsatz(hamiltonian, n_step)
-    return vqe.Vqe(ansatz, sampler=sampler)
 
 if __name__ == "__main__":
-    print("==================================================")
-    print("🎨 自作 TorchBackend + 新型VQE による Max-Cut 最適化")
-    print("==================================================")
-    
-    # グラフの定義とランナーの生成
+    print("Max-Cut via QAOA")
+    print("=" * 50)
+
     graph_edges = [(0, 1), (1, 2), (2, 3), (3, 0), (1, 3), (0, 2), (4, 0), (4, 3)]
     runner = maxcut_qaoa(2, graph_edges)
-    
-    # 💡 パラメータをじっくり更新させるために max_iter=300 で実行
-    # 裏側では自動的に PyTorch Adam と自作の TorchBackend が駆動します
-    result = runner.run(max_iter=300, verbose=True)
-    
-    # 最も確率の高かったビット配置（グループ分け）を取得
+
+    result = runner.run(max_iter=300)
     best_config = result.most_common()[0][0]
-    
-    print("--------------------------------------------------")
-    print("✨ 最適化完了！グラフのカット結果を出力します:")
-    print(f"頂点配置 (q0, q1, q2, q3, q4) = {best_config}")
-    
-    # アスキーアートに結果の 0 / 1 をマッピングして表示
+
+    print(f"Best partition (q0..q4) = {best_config}")
     print("""
          {4}
         / \\
@@ -58,4 +45,3 @@ if __name__ == "__main__":
        | x |
        {1}---{2}
 """.format(*best_config))
-    print("==================================================")

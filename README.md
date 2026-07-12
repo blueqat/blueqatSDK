@@ -10,6 +10,13 @@ gradients through `Circuit.run()`.
 ### Tutorial
 https://github.com/Blueqat/Blueqat-tutorials
 
+### Examples
+Runnable scripts in [`examples/`](examples/):
+- `bell_state.py` -- circuit basics: statevector, single amplitude, shot sampling
+- `vqe_ground_state.py` -- VQE with a custom `AnsatzBase` (not tied to QAOA)
+- `maxcut_qaoa.py` -- QAOA for the graph Max-Cut problem
+- `numpartition_qaoa.py` -- QAOA for number partitioning
+
 ### Install
 ```
 git clone https://github.com/blueqat/blueqatSDK
