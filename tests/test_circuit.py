@@ -759,3 +759,35 @@ def test_oneshot_method(backend):
     vec, meas = Circuit().h[0].cx[0, 1].m[:].oneshot(backend=backend)
     assert isinstance(vec, torch.Tensor)
     assert isinstance(meas, str)
+
+
+def test_ancilla_auto(backend):
+    c = Circuit(4).h[0].h[1].h[2].h[3]
+    with c.ancilla() as a:
+        c.cx[0, a[0]]
+        c.cx[0, a[0]]
+    assert c.n_qubits == 5
+    # cx applied twice cancels out, so the ancilla (qubit 4) stays |0>, and the
+    # rest of the state is unchanged from the plain 4-qubit circuit.
+    assert np.allclose(c.run(backend=backend),
+                       Circuit(4).h[0].h[1].h[2].h[3].i[4].run(backend=backend))
+
+
+def test_ancilla_pos_reset(backend):
+    c = Circuit(4).x[0]
+    with c.ancilla(pos=6, stop=8, reset=True) as a:
+        c.cx[0, a[0]]
+    assert c.n_qubits == 8
+    cnt = c.m[:].run(backend=backend, shots=10)
+    # ancilla qubits 6, 7 must be back at |0> after the block exits
+    assert all(bs[0] == '0' and bs[1] == '0' for bs in cnt)
+
+
+def test_ancilla_no_reset(backend):
+    c = Circuit(2).x[0]
+    with c.ancilla(reset=False) as a:
+        c.cx[0, a[0]]
+    assert c.n_qubits == 3
+    cnt = c.m[:].run(backend=backend, shots=10)
+    # ancilla qubit 2 keeps the cx's effect since reset=False
+    assert all(bs[0] == '1' for bs in cnt)

@@ -15,8 +15,10 @@
 
 from .circuit_to_unitary import circuit_to_unitary
 from .flatten import flatten
+from .qasm_parser import from_qasm
 
 __all__ = [
     'circuit_to_unitary',
     'flatten',
+    'from_qasm',
 ]
