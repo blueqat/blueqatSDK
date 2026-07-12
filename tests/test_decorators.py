@@ -1,7 +1,8 @@
 import pytest
 import numpy as np
 
-from blueqat import Circuit, circuitmacro
+from blueqat import Circuit
+from blueqat.decorators import circuitmacro
 
 
 @circuitmacro

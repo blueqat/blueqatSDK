@@ -135,6 +135,11 @@ class Circuit:
             
         return backend.run(self.ops, self.n_qubits, *args, **kwargs)
 
+    def to_qasm(self, output_prologue: bool = True) -> str:
+        """Convert this circuit into an OpenQASM 2.0 program string."""
+        from blueqat.backends.qasm_output_backend import QasmOutputBackend
+        return QasmOutputBackend().run(self.ops, self.n_qubits, output_prologue=output_prologue)
+
     def statevector(self, backend: 'BackendUnion' = None, **kwargs) -> torch.Tensor:
         """Run the circuit and get a statevector as a PyTorch Tensor to keep gradients intact."""
         from blueqat.backends import DEFAULT_BACKEND_NAME
@@ -162,6 +167,19 @@ class Circuit:
         if hasattr(backend, 'shots'):
             return backend.shots(self.ops, self.n_qubits, shots=shots, **kwargs)
         return backend.run(self.ops, self.n_qubits, shots=shots, returns='shots', **kwargs)
+
+    def oneshot(self, backend: 'BackendUnion' = None, **kwargs) -> Tuple[torch.Tensor, str]:
+        """Run the circuit once and return the post-measurement statevector together
+        with the single measured bitstring."""
+        from blueqat.backends import DEFAULT_BACKEND_NAME
+        if kwargs.get('returns'):
+            raise ValueError('Circuit.oneshot has no argument `returns`.')
+        if backend is None:
+            backend = self.__get_backend(DEFAULT_BACKEND_NAME)
+        elif isinstance(backend, str):
+            backend = self.__get_backend(backend)
+        vec, cnt = backend.run(self.ops, self.n_qubits, shots=1, returns='statevector_and_shots', **kwargs)
+        return vec, next(iter(cnt))
 
 
 class _GateWrapper(CircuitOperation[Circuit]):

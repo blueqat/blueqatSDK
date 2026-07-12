@@ -15,10 +15,12 @@
 Refactored and merged into a unified utils.py module with robust Autograd tracking.
 """
 
+import cmath
+import math
 from collections import Counter, defaultdict, namedtuple
 from dataclasses import dataclass
 from functools import reduce
-from itertools import product
+from itertools import combinations, product
 from math import pi
 from numbers import Number, Integral
 import typing
@@ -61,7 +63,7 @@ def _kron_1d_rec(krons: list, lo: int, hi: int) -> torch.Tensor:
     return _kron_1d(_kron_1d_rec(krons, lo, mid), _kron_1d_rec(krons, mid, hi))
 
 def _term_to_dataarray(term: 'Term', n_qubits: int, device: torch.device) -> torch.Tensor:
-    y_mat = torch.tensor([-1j, 1j], dtype=torch.complex128, device=device)
+    y_mat = torch.tensor([1j, -1j], dtype=torch.complex128, device=device)
     z_mat = torch.tensor([1, -1], dtype=torch.complex128, device=device)
     
     paulis = ['I'] * n_qubits
@@ -97,6 +99,10 @@ class _PauliImpl:
         if isinstance(other, Term): return self.to_term() == other
         if isinstance(other, Expr): return self.to_expr() == other
         return NotImplemented
+
+    def __ne__(self, other: Any) -> bool:
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
 
     def __mul__(self, other: Any) -> Any:
         if isinstance(other, (Number, torch.Tensor)): return Term.from_pauli(self, other)
@@ -211,6 +217,8 @@ class Term(_TermTuple):
         if isinstance(other, _PauliImpl): other = other.to_term()
         return _TermTuple.__eq__(self.simplify(), other.simplify()) if isinstance(other, Term) else False
 
+    def __ne__(self, other: Any) -> bool: return not self.__eq__(other)
+
     def to_term(self) -> 'Term': return self
     def to_expr(self) -> 'Expr': return Expr.from_term(self)
 
@@ -246,6 +254,8 @@ class Term(_TermTuple):
     @property
     def n_qubits(self) -> int: return self.max_n() + 1
 
+    def is_commutable_with(self, other: Any) -> bool: return is_commutable(self, other)
+
     def get_time_evolution(self) -> Any:
         term = self.simplify()
         coeff, ops = term.coeff, term.ops
@@ -271,7 +281,9 @@ class Term(_TermTuple):
     def to_matrix(self, n_qubits: int = -1, *, sparse: bool = False, device: Optional[torch.device] = None) -> torch.Tensor:
         if device is None: device = torch.device('cpu')
         if n_qubits == -1: n_qubits = self.n_qubits
-        if n_qubits == 0: return torch.as_tensor([[self.coeff]], dtype=torch.complex128, device=device)
+        if n_qubits == 0:
+            m = torch.as_tensor([[self.coeff]], dtype=torch.complex128, device=device)
+            return m.to_sparse() if sparse else m
 
         dim = 2**n_qubits
         term = self.simplify()
@@ -310,6 +322,8 @@ class Expr(_ExprTuple):
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, (_PauliImpl, Term)): other = other.to_expr()
         return self.simplify().terms == other.simplify().terms if isinstance(other, Expr) else False
+
+    def __ne__(self, other: Any) -> bool: return not self.__eq__(other)
 
     def __add__(self, other: Any) -> 'Expr':
         if isinstance(other, (Number, torch.Tensor)): other = Expr.from_number(other)
@@ -354,11 +368,15 @@ class Expr(_ExprTuple):
 
     def __truediv__(self, other: Any) -> Any: return Expr(tuple(term / other for term in self.terms)) if isinstance(other, (Number, torch.Tensor)) else NotImplemented
     def __iter__(self) -> Iterator[Term]: return iter(self.terms)
+    def __getnewargs__(self) -> Tuple[Tuple[Term, ...]]: return (self.terms, )
     def __repr__(self) -> str: return "0*I" if not self.terms else " + ".join(repr(term) for term in self.terms)
     def to_expr(self) -> 'Expr': return self
     def max_n(self) -> int:
         try: return max(term.max_n() for term in self.terms if term.ops)
         except ValueError: return -1
+    def is_commutable_with(self, other: Any) -> bool: return is_commutable(self, other)
+    def is_all_terms_commutable(self) -> bool:
+        return all(is_commutable(a, b) for a, b in combinations(self.terms, 2))
     @property
     def n_qubits(self) -> int: return self.max_n() + 1
     def coeffs(self) -> Iterator[Any]:
@@ -369,7 +387,7 @@ class Expr(_ExprTuple):
         for term in self.terms:
             term = term.simplify()
             d[term.ops] = d[term.ops] + term.coeff if term.ops in d else term.coeff
-        return Expr.from_terms_iter(Term.from_ops_iter(k, d[k]) for k in sorted(d, key=repr))
+        return Expr.from_terms_iter(Term.from_ops_iter(k, d[k]) for k in sorted(d, key=repr) if d[k])
 
     def to_matrix(self, n_qubits: int = -1, *, sparse: bool = False, device: Optional[torch.device] = None) -> torch.Tensor:
         if device is None: device = torch.device('cpu')
@@ -394,6 +412,20 @@ def pauli_from_char(ch: str, n: int = 0) -> '_PauliImpl':
     if ch == "Z": return Z(n)
     raise ValueError("ch shall be X, Y, Z or I")
 
+def term_from_chars(chars: str) -> 'Term':
+    """Make Pauli's Term from chars written as 'X', 'Y', 'Z' or 'I'."""
+    return Term.from_chars(reversed(chars))
+
+def commutator(expr1: Any, expr2: Any) -> 'Expr':
+    """Returns [expr1, expr2] = expr1 * expr2 - expr2 * expr1."""
+    expr1 = expr1.to_expr().simplify()
+    expr2 = expr2.to_expr().simplify()
+    return (expr1 * expr2 - expr2 * expr1).simplify()
+
+def is_commutable(expr1: Any, expr2: Any, eps: float = 1e-8) -> bool:
+    """Test whether expr1 and expr2 are commutable."""
+    return sum((x * x.conjugate()).real for x in commutator(expr1, expr2).coeffs()) < eps
+
 def qubo_bit(n: int) -> Expr:
     return 0.5 - 0.5 * Z[n]
 
@@ -416,8 +448,90 @@ def to_inttuple(bitstr: Union[str, Counter, Dict[str, int]]) -> Union[Tuple[int,
     if isinstance(bitstr, dict): return {tuple(int(b) for b in k): v for k, v in bitstr.items()}
     raise ValueError("bitstr type shall be `str`, `Counter` or `dict`")
 
+def ignore_global_phase(statevec: torch.Tensor) -> torch.Tensor:
+    """Multiply e^-iθ to `statevec` where θ is a phase of first non-zero element."""
+    for q in statevec:
+        if torch.abs(q) > 1e-7:
+            ang = torch.abs(q) / q
+            statevec = statevec * ang
+            break
+    return statevec
+
 def gen_graycode(n: int) -> Iterator[int]:
     return (v ^ (v >> 1) for v in range(2**n))
+
+
+def gen_gray_controls(n: int) -> Iterator[Tuple[int, int, int]]:
+    """Generate an iterator which returns bit indices for constructing
+    Gray code based controlled gate.
+    """
+    def gen_changedbit(n_bits: int) -> Iterator[int]:
+        pow2 = [2 ** i for i in range(n_bits)]
+        gen = gen_graycode(n_bits)
+        try:
+            prev = next(gen)
+        except StopIteration:
+            raise ValueError("Empty Gray code generation.") from None
+        for g in gen:
+            yield pow2.index(g ^ prev)
+            prev = g
+
+    def gen_cxtarget() -> Iterator[int]:
+        k = 0
+        while True:
+            for _ in range(2**k):
+                yield k
+            k += 1
+
+    def gen_parity() -> Iterator[int]:
+        while True:
+            yield 0
+            yield 1
+
+    for c0, c1, p in zip(gen_changedbit(n), gen_cxtarget(), gen_parity()):
+        if c0 == c1:
+            yield c0 - 1, c1, p
+        else:
+            yield c0, c1, p
+
+
+def check_unitarity(mat: torch.Tensor) -> bool:
+    """Check whether mat is a unitary matrix."""
+    if mat.dim() != 2 or mat.shape[0] != mat.shape[1]:
+        return False
+    eye = torch.eye(mat.shape[0], dtype=mat.dtype, device=mat.device)
+    return torch.allclose(mat @ mat.mH, eye, atol=1e-6)
+
+
+def calc_u_params(mat: torch.Tensor) -> Tuple[float, float, float, float]:
+    """Calculate U-gate parameters from a 2x2 unitary matrix."""
+    assert mat.shape == (2, 2)
+    assert check_unitarity(mat)
+    gamma = cmath.phase(complex(mat[0, 0]))
+    phase = cmath.exp(-1j * gamma)
+    m00 = complex(mat[0, 0]) * phase
+    m10 = complex(mat[1, 0]) * phase
+    m11 = complex(mat[1, 1]) * phase
+    theta = math.atan2(abs(m10), m00.real) * 2.0
+    phi_plus_lambda = cmath.phase(m11)
+    phi = cmath.phase(m10) % (2.0 * math.pi)
+    lam = (phi_plus_lambda - phi) % (2.0 * math.pi)
+    return theta, phi, lam, gamma
+
+
+def sqrt_2x2_matrix(mat: torch.Tensor) -> torch.Tensor:
+    """Returns square root of a 2x2 matrix.
+
+    Reference: https://en.wikipedia.org/wiki/Square_root_of_a_2_by_2_matrix
+    """
+    assert mat.shape == (2, 2)
+    eye = torch.eye(2, dtype=mat.dtype, device=mat.device)
+    s = torch.sqrt(torch.linalg.det(mat))
+    t = torch.sqrt(mat[0, 0] + mat[1, 1] + 2 * s)
+    if abs(complex(t)) < 1e-8:  # Avoid division by zero
+        s = -s
+        t = torch.sqrt(mat[0, 0] + mat[1, 1] + 2 * s)
+    return (mat + s * eye) / t
 
 
 # ==============================================================================
