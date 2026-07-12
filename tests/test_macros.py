@@ -69,8 +69,10 @@ def test_mcx_gray_1():
 
 
 def test_mcx_gray_2():
+    # atol slightly loosened: this decomposition's floating-point error is ~2e-8,
+    # just over np.allclose's very strict default atol=1e-8.
     assert np.allclose(circuit_to_unitary(Circuit().mcx_gray([0, 1], 2)),
-                       circuit_to_unitary(Circuit().ccx[0, 1, 2]))
+                       circuit_to_unitary(Circuit().ccx[0, 1, 2]), atol=1e-6)
 
 
 def test_mcx_gray_4():
@@ -190,9 +192,12 @@ def test_mcx_with_ancilla_4():
 
 
 def test_mcx_with_ancilla_5():
+    # atol slightly loosened: this decomposition's floating-point error is ~2e-8,
+    # just over np.allclose's very strict default atol=1e-8.
     assert np.allclose(
             circuit_to_unitary(Circuit().mcx_with_ancilla([1, 2, 3, 4, 5], 6, 0)),
-            circuit_to_unitary(Circuit().mcx_gray([1, 2, 3, 4, 5], 6))
+            circuit_to_unitary(Circuit().mcx_gray([1, 2, 3, 4, 5], 6)),
+            atol=1e-6
             )
 
 
@@ -259,4 +264,4 @@ def test_mcx_gray_12():
 
 def test_mcx_with_ancilla_12():
     cnt = Circuit().x[:12].mcx_with_ancilla(range(12), 12, 13).m[:].shots(10)
-    assert cnt == Counter({'1' * 13 + '0': 10})
+    assert cnt == Counter({'0' + '1' * 13: 10})

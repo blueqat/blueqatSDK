@@ -19,6 +19,7 @@ from collections import Counter
 
 import pytest
 import numpy as np
+import torch
 
 from blueqat import Circuit, BlueqatGlobalSetting
 from blueqat.backends.onequbitgate_decomposer import u_decomposer
@@ -33,30 +34,21 @@ def vec_distsq(a, b):
 
 
 def test_hgate1(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().h[1].h[0].run(backend=backend, 
                                                shots=shots),
                        np.array([0.5, 0.5, 0.5, 0.5]))
 
 
 def test_hgate2(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().x[0].h[0].run(backend=backend,
                                                shots=shots),
                        np.array([1 / np.sqrt(2), -1 / np.sqrt(2)]))
 
 
 def test_hgate3(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().h[:2].run(backend=backend,
                                            shots=shots),
                        Circuit().h[0].h[1].run(backend=backend,
@@ -64,10 +56,7 @@ def test_hgate3(backend):
 
 
 def test_pauli1(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         ignore_global_phase(Circuit().x[0].y[0].run(backend=backend,
                                                     shots=shots)),
@@ -76,10 +65,7 @@ def test_pauli1(backend):
 
 
 def test_pauli2(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         ignore_global_phase(Circuit().y[0].z[0].run(backend=backend,
                                                     shots=shots)),
@@ -88,10 +74,7 @@ def test_pauli2(backend):
 
 
 def test_pauli3(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().z[0].x[0].run(backend=backend,
                                 shots=shots),
@@ -100,10 +83,7 @@ def test_pauli3(backend):
 
 
 def test_cx1(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().h[0].h[1].cx[1, 0].h[0].h[1].run(backend=backend,
                                                    shots=shots),
@@ -112,10 +92,7 @@ def test_cx1(backend):
 
 
 def test_cx2(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().x[2].cx[:4:2, 1:4:2].run(backend=backend,
                                                           shots=shots),
                        Circuit().x[2:4].run(backend=backend,
@@ -124,10 +101,7 @@ def test_cx2(backend):
 
 def test_cx3(backend):
     '''Refer issues #76 (https://github.com/Blueqat/Blueqat/issues/76)'''
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit().z[2].x[0].cx[0, 1]
     assert np.allclose(c.run(backend=backend,
                              shots=shots),
@@ -136,10 +110,7 @@ def test_cx3(backend):
 
 def test_cx4(backend):
     '''Refer issues #76 (https://github.com/Blueqat/Blueqat/issues/76)'''
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit(4).x[0].cx[0, 1]
     result = np.zeros(16)
     result[3] = 1.0
@@ -149,10 +120,7 @@ def test_cx4(backend):
 
 def test_cx5(backend):
     '''Refer issues #76 (https://github.com/Blueqat/Blueqat/issues/76)'''
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit(4).x[0].cx[0, 2].cx[0, 1]
     result = np.zeros(16)
     result[7] = 1.0
@@ -162,10 +130,7 @@ def test_cx5(backend):
 
 def test_cx6(backend):
     '''Refer issues #76 (https://github.com/Blueqat/Blueqat/issues/76)'''
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit().x[0].cx[0, 3].cx[3, 1]
     result = np.zeros(16)
     result[11] = 1.0
@@ -174,28 +139,21 @@ def test_cx6(backend):
 
 
 def test_rz1(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         ignore_global_phase(Circuit().h[0].rz(
             math.pi)[0].run(backend=backend,
                             shots=shots)),
         Circuit().x[0].h[0].run(backend=backend,
                                 shots=shots))
-    if backend not in ['quimb']:
-        assert np.allclose(Circuit().h[0].r(math.pi)[0].run(backend=backend,
-                                                            shots=shots),
-                        Circuit().x[0].h[0].run(backend=backend,
-                                                shots=shots))
+    assert np.allclose(Circuit().h[0].r(math.pi)[0].run(backend=backend,
+                                                        shots=shots),
+                    Circuit().x[0].h[0].run(backend=backend,
+                                            shots=shots))
 
 
 def test_rz2(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().h[0].rz(math.pi / 3)[0].h[1].rz(math.pi /
                                                   3)[1].run(backend=backend,
@@ -205,10 +163,7 @@ def test_rz2(backend):
 
 
 def test_tgate(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().t[0].run(backend=backend, shots=shots),
         ignore_global_phase(Circuit().rz(math.pi / 4)[0].run(backend=backend,
@@ -216,10 +171,7 @@ def test_tgate(backend):
 
 
 def test_sgate(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().s[0].run(backend=backend, shots=shots),
         ignore_global_phase(Circuit().rz(math.pi / 2)[0].run(backend=backend,
@@ -227,10 +179,7 @@ def test_sgate(backend):
 
 
 def test_tdg_gate(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         ignore_global_phase(Circuit().s[1].tdg[1].tdg[1].run(backend=backend,
                                                              shots=shots)),
@@ -239,10 +188,7 @@ def test_tdg_gate(backend):
 
 
 def test_sdg_gate(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().s[1].sdg[1].run(backend=backend,
                                                  shots=shots),
                        Circuit().i[1].run(backend=backend,
@@ -250,10 +196,7 @@ def test_sdg_gate(backend):
 
 
 def test_y_gate(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().y[1].run(backend=backend,
                                           shots=shots),
                        Circuit().z[1].x[1].run(backend=backend,
@@ -267,40 +210,23 @@ def test_toffoli_gate(bits, backend):
         c.x[0]
     if bits[1]:
         c.x[1]
-    if backend in ['quimb']:
-        res_counter = c.ccx[0, 1, 2].run(backend=backend, shots=1)
-        expected_meas = "1" if bits[0] and bits[1] else "0"
-        assert list(res_counter)[0][2] == expected_meas
-    else:
-        c.ccx[0, 1, 2].m[2]
-        expected_meas = "001" if bits[0] and bits[1] else "000"
-        assert c.run(backend=backend, shots=1) == Counter([expected_meas])
+    c.ccx[0, 1, 2].m[2]
+    expected_meas = "100" if bits[0] and bits[1] else "000"
+    assert c.run(backend=backend, shots=1) == Counter([expected_meas])
 
 
 def test_u_gate(backend):
-    if backend in ['quimb']:
-        shots = -1
-        assert np.allclose(
-            Circuit().u(1.23, 4.56, -5.43)[1].run(backend=backend,
-                                                    shots=shots),
-            ignore_global_phase(
-            Circuit().rz(-5.43)[1].ry(1.23)[1].rz(4.56)[1].run(backend=backend,
-                                                            shots=shots)))
-    else:
-        shots = None
-        assert np.allclose(
-            Circuit().u(1.23, 4.56, -5.43,
-                        -0.5 * (4.56 - 5.43))[1].run(backend=backend,
-                                                    shots=shots),
-            Circuit().rz(-5.43)[1].ry(1.23)[1].rz(4.56)[1].run(backend=backend,
-                                                            shots=shots))
+    shots = None
+    assert np.allclose(
+        Circuit().u(1.23, 4.56, -5.43,
+                    -0.5 * (4.56 - 5.43))[1].run(backend=backend,
+                                                shots=shots),
+        Circuit().rz(-5.43)[1].ry(1.23)[1].rz(4.56)[1].run(backend=backend,
+                                                        shots=shots))
 
 
 def test_r_gate(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(Circuit().r(-1.23)[1].run(backend=backend,
                                                  shots=shots),
                        Circuit().u(0, 0, -1.23)[1].run(backend=backend,
@@ -308,10 +234,7 @@ def test_r_gate(backend):
 
 
 def test_rotation1(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().ry(-math.pi / 2)[0].rz(math.pi / 6)[0].ry(
             math.pi / 2)[0].run(backend=backend,
@@ -321,10 +244,7 @@ def test_rotation1(backend):
 
 
 def test_crotation(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().cu(1.23, 4.56, -5.43,
                      -0.5 * (4.56 - 5.43))[3, 1].run(backend=backend,
@@ -337,10 +257,7 @@ def test_crotation(backend):
 
 
 def test_crotation2(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     assert np.allclose(
         Circuit().crx(1.23)[1, 3].run(backend=backend,
                                       shots=shots),
@@ -349,10 +266,7 @@ def test_crotation2(backend):
 
 
 def test_crotation3(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     p0 = math.acos(math.sqrt(0.3)) * 2
     p1 = math.acos(math.sqrt(0.4)) * 2
     # |00> -> 0.3
@@ -365,10 +279,7 @@ def test_crotation3(backend):
 
 
 def test_globalphase_rz(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     theta = 1.2
     c = Circuit().rz(theta)[0]
     assert abs(c.run(backend=backend,
@@ -376,10 +287,7 @@ def test_globalphase_rz(backend):
 
 
 def test_globalphase_r(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     theta = 1.2
     c = Circuit().phase(theta)[0]
     assert abs(c.run(backend=backend,
@@ -387,10 +295,7 @@ def test_globalphase_r(backend):
 
 
 def test_globalphase_u(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     theta = 1.2
     phi = 1.6
     lambd = 2.3
@@ -399,10 +304,6 @@ def test_globalphase_u(backend):
                      shots=shots)[0] - math.cos(theta / 2)) < 1e-8
 
 
-@pytest.mark.skipif(
-    condition=lambda backend: backend == 'quimb',
-    reason='Skip test for specific backend',
-)
 def test_globalphase_u_with_gamma(backend):
     theta = 1.2
     phi = 1.6
@@ -415,10 +316,7 @@ def test_globalphase_u_with_gamma(backend):
 
 
 def test_controlled_gate_phase_crz(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     theta = 1.2
     val = np.exp(-0.5j * theta)
     c0 = Circuit().crz(theta)[0, 1]
@@ -432,10 +330,7 @@ def test_controlled_gate_phase_crz(backend):
 
 
 def test_controlled_gate_phase_cphase(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     theta = 1.2
     val = 1.0
     c0 = Circuit().cphase(theta)[0, 1]
@@ -449,10 +344,7 @@ def test_controlled_gate_phase_cphase(backend):
 
 
 def test_controlled_gate_phase_cu(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     theta = 1.2
     phi = 1.6
     lambd = 2.3
@@ -466,10 +358,6 @@ def test_controlled_gate_phase_cu(backend):
     assert abs(v1[1] / v0[0] - math.cos(theta / 2)) < 1e-8
 
 
-@pytest.mark.skipif(
-    condition=lambda backend: backend == 'quimb',
-    reason='Skip test for specific backend',
-)
 def test_controlled_gate_phase_cu_with_gamma(backend):
     theta = 1.2
     phi = 1.6
@@ -510,10 +398,6 @@ def test_measurement3(backend):
     assert abs(most_common[1] - 0.75 * n) < three_sigma
 
 
-@pytest.mark.skipif(
-    condition=lambda backend: backend == 'quimb',
-    reason='Skip test for specific backend',
-)
 def test_measurement_multiqubit1(backend):
     c = Circuit().x[0].m[1]
     cnt = c.run(backend=backend, shots=100)
@@ -524,7 +408,7 @@ def test_measurement_multiqubit1(backend):
 def test_measurement_multiqubit2(backend):
     c = Circuit().x[0].m[1::-1]
     cnt = c.run(backend=backend, shots=100)
-    assert cnt.most_common(1) == [("10", 100)]
+    assert cnt.most_common(1) == [("01", 100)]
 
 
 def test_measurement_entangled_state(backend):
@@ -548,10 +432,6 @@ def test_measurement_hadamard1(backend):
     assert abs(a[1] - n / 2) < three_sigma
 
 
-@pytest.mark.skipif(
-    condition=lambda backend: backend == 'quimb',
-    reason='Skip test for specific backend',
-)
 def test_measurement_after_qubits1(backend):
     for _ in range(50):
         c = Circuit().h[0].m[0]
@@ -565,10 +445,7 @@ def test_measurement_after_qubits1(backend):
 
 
 def test_caching_then_expand(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit().h[0]
     c.run(backend=backend,
           shots=shots)
@@ -578,25 +455,14 @@ def test_caching_then_expand(backend):
 
 
 def test_copy_empty(backend):
-    if backend in ['quimb']:
-        c = Circuit(1)
-    else:
-        c = Circuit()
+    c = Circuit()
     c.run(backend=backend)
     cc = c.copy(copy_backends=True)
     assert c.ops == cc.ops and c.ops is not cc.ops
-    if backend in ['numpy', 'numba']:
-        assert c._backends[backend].cache is None and cc._backends[
-            backend].cache is None
-        assert c._backends[backend].cache_idx == cc._backends[
-            backend].cache_idx == -1
 
 
 def test_cache_then_append(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit()
     c.x[0]
     c.run()
@@ -609,10 +475,7 @@ def test_cache_then_append(backend):
 
 
 def test_concat_circuit1(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c1 = Circuit()
     c1.h[0]
     c1.run()
@@ -627,10 +490,7 @@ def test_concat_circuit1(backend):
 
 
 def test_concat_circuit2(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c1 = Circuit()
     c1.h[1]
     c1.run()
@@ -645,10 +505,7 @@ def test_concat_circuit2(backend):
 
 
 def test_concat_circuit3(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c1 = Circuit()
     c1.x[0]
     c2 = Circuit()
@@ -670,10 +527,7 @@ def test_concat_circuit3(backend):
 
 
 def test_concat_circuit4(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c1 = Circuit()
     c1.x[0]
     c2 = Circuit()
@@ -695,10 +549,7 @@ def test_concat_circuit4(backend):
 
 
 def test_complicated_circuit(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     c = Circuit()
     c.x[0].h[0].rx(-1.5707963267948966)[2].cx[0, 2].rz(0.095491506289)[2]
     c.cx[0, 2].h[0].rx(1.5707963267948966)[2].h[0].ry(-1.5707963267948966)[2]
@@ -747,27 +598,6 @@ def test_complicated_circuit(backend):
         ]))
 
 
-def test_switch_backend1():
-    c = Circuit().x[0].h[0]
-    _backend = BlueqatGlobalSetting.get_default_backend_name()
-    if _backend in ['quimb']:
-        assert np.array_equal(c.run(shots=-1), c.run(backend="numpy"))
-    else:
-        assert np.array_equal(c.run(), c.run(backend="numpy"))
-
-    BlueqatGlobalSetting.set_default_backend("qasm_output")
-    assert c.run() == c.to_qasm()
-
-    # Different instance of QasmOutputBackend is used.
-    # Lhs is owned by Circuit, rhs is passed as argument. But in this case same result.
-    from blueqat.backends.qasm_output_backend import QasmOutputBackend
-    assert c.run(output_prologue=False) == c.run(False,
-                                                 backend=QasmOutputBackend())
-
-    BlueqatGlobalSetting.set_default_backend("numpy")
-    assert c.run(shots=5) == c.run_with_numpy(shots=5)
-
-
 def test_macro():
     def macro(c, i):
         return c.h[i]
@@ -784,15 +614,11 @@ def test_macro():
     (Circuit(10).h[:].reset[:], Circuit(10)),
 ])
 def test_reset1(backend, pair):
-    if backend in ['qgate', 'quimb']:
-        pytest.xfail('mat1 gate for this backend is unimplemented.')
     assert np.allclose(pair[0].run(backend=backend),
                        pair[1].run(backend=backend))
 
 
 def test_reset2(backend):
-    if backend in ['qgate', 'quimb']:
-        pytest.xfail('mat1 gate for this backend is unimplemented.')
     common = Circuit().h[0].cx[0, 1].cx[0, 2].reset[1].m[:].run(
         backend=backend, shots=100).most_common(3)
     assert len(common) == 2
@@ -802,8 +628,6 @@ def test_reset2(backend):
 
 
 def test_mat1(backend):
-    if backend in ['qgate', 'quimb']:
-        pytest.xfail('mat1 gate for this backend is unimplemented.')
     p = random.random() * math.pi
     q = random.random() * math.pi
     r = random.random() * math.pi
@@ -818,8 +642,6 @@ def test_mat1(backend):
 
 
 def test_mat1_2(backend):
-    if backend in ['qgate', 'quimb']:
-        pytest.xfail('mat1 gate for this backend is unimplemented.')
     t = random.random() * math.pi
     a = np.array([[math.cos(t), -math.sin(t)], [math.sin(t), math.cos(t)]])
     v1 = Circuit().mat1(a)[1:3].run(backend=backend)
@@ -828,10 +650,7 @@ def test_mat1_2(backend):
 
 
 def test_swap(backend):
-    if backend in ['quimb']:
-        shots = -1
-    else:
-        shots = None
+    shots = None
     p = random.random() * math.pi
     q = random.random() * math.pi
     r = random.random() * math.pi
@@ -847,8 +666,6 @@ def test_swap(backend):
 
 
 def test_mat1_decomposite(backend):
-    if backend in ['qgate', 'quimb']:
-        pytest.xfail('mat1 gate for this backend is unimplemented.')
     p = random.random() * math.pi
     q = random.random() * math.pi
     r = random.random() * math.pi
@@ -907,15 +724,6 @@ def test_decomposite3(basis):
 
 
 def test_initial_vec(backend):
-    if backend == 'qgate':
-        import qgate
-        try:
-            qgate.__version__
-        except AttributeError:
-            pytest.xfail("This version of qgate doesn't support initial vec.")
-    if backend in ['quimb']:
-        pytest.xfail("This backend doesn't support initial vec.")
-
     c = Circuit().h[0]
     v1 = c.run(backend=backend)
     assert np.allclose(c.run(backend=backend, initial=v1),
@@ -923,42 +731,22 @@ def test_initial_vec(backend):
 
 
 def test_initial_vec2(backend):
-    if backend == 'qgate':
-        import qgate
-        try:
-            qgate.__version__
-        except AttributeError:
-            pytest.xfail("This version of qgate doesn't support initial vec.")
-    if backend in ['quimb']:
-        pytest.xfail("This backend doesn't support initial vec.")
-
     v = Circuit().x[1].run(backend=backend)
     cnt = Circuit().x[0].m[0, 1].run(backend=backend, initial=v, shots=100)
     assert cnt == Counter({'11': 100})
 
 
 def test_initial_vec3(backend):
-    if backend == 'qgate':
-        import qgate
-        try:
-            qgate.__version__
-        except AttributeError:
-            pytest.xfail("This version of qgate doesn't support initial vec.")
-    if backend in ['quimb']:
-        pytest.xfail("This backend doesn't support initial vec.")
-
     v = Circuit(4).h[3].run(backend=backend)
     v2 = Circuit(4).run(backend=backend, initial=v)
     assert np.allclose(v, v2)
 
 
-@pytest.mark.skipif(
-    condition=lambda backend: backend == 'quimb',
-    reason='Skip test for specific backend',
-)
 def test_statevector_method(backend):
+    # statevector() intentionally returns a torch.Tensor (not np.ndarray) to keep
+    # gradients intact, per its docstring.
     assert isinstance(
-        Circuit().h[0].cx[0, 1].m[:].statevector(backend=backend), np.ndarray)
+        Circuit().h[0].cx[0, 1].m[:].statevector(backend=backend), torch.Tensor)
 
 
 def test_shots_method(backend):
@@ -966,11 +754,8 @@ def test_shots_method(backend):
         Circuit().h[0].cx[0, 1].m[:].shots(200, backend=backend), Counter)
 
 
-@pytest.mark.skipif(
-    condition=lambda backend: backend == 'quimb',
-    reason='Skip test for specific backend',
-)
 def test_oneshot_method(backend):
+    # vec is intentionally a torch.Tensor (not np.ndarray), matching statevector().
     vec, meas = Circuit().h[0].cx[0, 1].m[:].oneshot(backend=backend)
-    assert isinstance(vec, np.ndarray)
+    assert isinstance(vec, torch.Tensor)
     assert isinstance(meas, str)

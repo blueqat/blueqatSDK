@@ -15,8 +15,7 @@
 import pickle
 import pytest
 import numpy as np
-from blueqat import Circuit, pauli
-from blueqat.pauli import *
+from blueqat.utils import X, Y, Z, I, Expr, Term, pauli_from_char, term_from_chars
 
 def test_equality_identity_matrix():
     assert I == I()
@@ -135,12 +134,11 @@ def test_to_matrix(pair):
     assert np.allclose(pair[0], pair[1])
 
 
-@pytest.mark.parametrize('sparse', list(pauli._sparse_types))
 @pytest.mark.parametrize('expr', [X[1], I, 3*I, 3*I+1j*I, 1j*Y[2]*Z[0], 3+X[0], 2.*X[1]*Y[2] + 1.5*X[1]*Y[2],
                                   3*Y[3] + 4*X[1]*Y[1] - 2j*Z[1] + (2 + 4j)*X[4],
                                   3.5*Z[0]*Z[1]*Z[2], 3.5*Y[0]*Y[1]*Y[2]])
-def test_sparse(sparse, expr):
-    assert np.allclose(expr.to_matrix(), expr.to_matrix(sparse=sparse).toarray())
+def test_sparse(expr):
+    assert np.allclose(expr.to_matrix(), expr.to_matrix(sparse=True).to_dense())
 
 
 @pytest.mark.parametrize('h', [

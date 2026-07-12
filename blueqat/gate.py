@@ -58,7 +58,7 @@ class Operation:
         """Returns printable string of args."""
         if not self.params:
             return ''
-        return '（' + ', '.join(str(param) for param in self.params) + '）'
+        return '(' + ', '.join(str(param) for param in self.params) + ')'
 
     def _str_targets(self) -> str:
         """Returns printable string of targets."""
