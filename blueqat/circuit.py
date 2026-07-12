@@ -181,6 +181,58 @@ class Circuit:
         vec, cnt = backend.run(self.ops, self.n_qubits, shots=1, returns='statevector_and_shots', **kwargs)
         return vec, next(iter(cnt))
 
+    def ancilla(self, n: int = 1, pos: Optional[int] = None, stop: Optional[int] = None,
+                reset: bool = True) -> '_AncillaContext':
+        """Context manager allocating temporary ancilla qubit(s) for use inside the `with` block.
+
+        By default, appends `n` fresh qubits past the circuit's current width:
+
+            with c.ancilla() as a:
+                c.cx[0, a[0]]
+
+        `pos`/`stop` instead pin the ancilla range to specific qubit indices
+        (`range(pos, stop)`; `stop` defaults to `pos + n`):
+
+            with c.ancilla(pos=4, stop=6, reset=True) as a:
+                c.cx[3, a[0]]
+
+        If `reset` is true (the default), a `reset` gate is appended for each
+        ancilla qubit on exiting the block, so they're back at |0> and safe to
+        reuse elsewhere in the circuit.
+        """
+        if pos is not None:
+            indices = list(range(pos, stop if stop is not None else pos + n))
+            self.n_qubits = max(self.n_qubits, (max(indices) + 1) if indices else 0)
+        else:
+            indices = list(range(self.n_qubits, self.n_qubits + n))
+            self.n_qubits += n
+        return _AncillaContext(self, indices, reset)
+
+
+class _AncillaContext:
+    """Context manager returned by `Circuit.ancilla()`. See that method's docstring."""
+    def __init__(self, circuit: Circuit, indices: list, reset: bool) -> None:
+        self.circuit = circuit
+        self.indices = indices
+        self.reset = reset
+
+    def __getitem__(self, i: int) -> int:
+        return self.indices[i]
+
+    def __len__(self) -> int:
+        return len(self.indices)
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __enter__(self) -> '_AncillaContext':
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self.reset and exc_type is None:
+            for idx in self.indices:
+                self.circuit.reset[idx]
+
 
 class _GateWrapper(CircuitOperation[Circuit]):
     def __init__(self, circuit: Circuit, op_type: Type['Operation']):

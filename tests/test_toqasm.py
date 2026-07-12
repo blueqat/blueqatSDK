@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import math
+
+import numpy as np
+import pytest
+
 from blueqat import Circuit
+from blueqat.circuit_funcs import from_qasm
 
 QASM = """OPENQASM 2.0;
 include "qelib1.inc";
@@ -70,3 +76,33 @@ def test_qasm_noprologue2():
     c = Circuit().x[0].y[0].z[0]
     qasm = c.to_qasm(False)
     assert qasm == correct_qasm
+
+def test_from_qasm_roundtrip():
+    c = from_qasm(QASM)
+    assert c.to_qasm() == QASM
+
+def test_from_qasm_angle_expressions():
+    qasm = """rx(pi/2) q[0];
+ry(-pi/4) q[1];
+crx(pi) q[0],q[1];"""
+    c = from_qasm(qasm)
+    expected = Circuit(2).rx(math.pi / 2)[0].ry(-math.pi / 4)[1].crx(math.pi)[0, 1]
+    assert np.allclose(c.run(), expected.run())
+
+def test_from_qasm_multi_qubit_gates():
+    qasm = """ccx q[0],q[1],q[2];
+cswap q[0],q[1],q[2];
+sdg q[3];
+tdg q[3];
+rzz(0.5) q[2],q[3];"""
+    c = from_qasm(qasm)
+    expected = Circuit(4).ccx[0, 1, 2].cswap[0, 1, 2].sdg[3].tdg[3].rzz(0.5)[2, 3]
+    assert np.allclose(c.run(), expected.run())
+
+def test_from_qasm_rejects_unsafe_expressions():
+    with pytest.raises(ValueError):
+        from_qasm('rx(__import__("os")) q[0];')
+
+def test_from_qasm_rejects_unknown_gate():
+    with pytest.raises(ValueError):
+        from_qasm('bogusgate q[0];')

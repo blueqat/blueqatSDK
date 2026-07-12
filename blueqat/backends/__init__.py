@@ -23,6 +23,7 @@ from typing import Any, Dict
 from blueqat.backends.backendbase import Backend, get_backend, register_backend
 from blueqat.backends.torch_backend import TorchBackend
 from blueqat.backends.draw_backend import DrawCircuit
+from blueqat.backends.tn_draw_backend import TNGraphDrawBackend
 from blueqat.backends.onequbitgate_transpiler import OneQubitGateCompactionTranspiler
 from blueqat.backends.twoqubitgate_transpiler import TwoQubitGateDecomposingTranspiler
 from .flexible_circuit_composer import FlexibleCircuitComposer
@@ -43,6 +44,7 @@ BACKENDS: Dict[str, Any] = {
     
     # ユーティリティ
     "draw": DrawCircuit,
+    "draw_tn": TNGraphDrawBackend,
 }
 
 # デフォルトバックエンドを純PyTorch状態ベクトルに設定
