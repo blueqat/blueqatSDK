@@ -1,57 +1,31 @@
-# =========================================================
-# 💡 1. ターミナル環境（pytest）でのインポート・レジストリハック
-# =========================================================
-import os
-import sys
-
-# テスト実行時に自作SDKのパス（ルート）を最優先で探索パスに挿入
-SDK_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if SDK_ROOT not in sys.path:
-    sys.path.insert(0, SDK_ROOT)
-
-# 既に読み込まれている公式グローバル版Blueqatの残骸をメモリから完全消去
-for mod_name in list(sys.modules.keys()):
-    if mod_name == "blueqat" or mod_name.startswith("blueqat."):
-        del sys.modules[mod_name]
-
-# 自作バックエンドをインポートして、文字列呼び出し用のレジストリ（BACKENDS）を強制上書き
-from blueqat.backends import BACKENDS
-from blueqat.backends.torch_backend import TorchBackend
-
-BACKENDS["statevector"] = lambda: TorchBackend(mode="statevector")
-BACKENDS["torch"] = lambda: TorchBackend(mode="statevector")
-BACKENDS["tensornet"] = lambda: TorchBackend(mode="tensornet")
-BACKENDS["torch_tn"] = lambda: TorchBackend(mode="tensornet")
-
-# =========================================================
-# 📦 2. 標準ライブラリ ＆ PyTorch / Blueqat のインポート
-# =========================================================
 import math
 import pytest
 import torch
 from blueqat import Circuit
+from blueqat.backends.torch_backend import TorchBackend
 
 # =========================================================
 # 🧪 3. ゲート演算 ＆ 自動微分（勾配）の連動検証テスト
 # =========================================================
 
-# 💡 修正ポイント: Blueqatの標準エンディアン (左が q0, 右が q1) に基づく状態ベクトルの絶対値に修正
-# 基底の並び順: [|00>, |01>, |10>, |11>]
+# 💡 Blueqatの標準エンディアン (index のビット t が qubit t。qubit0がLSB) に基づく状態ベクトルの絶対値。
+# これは Qiskit の Statevector と同じ並び順であり、statevector/tensornet 両バックエンドで一致する。
+# 基底の並び順: [|00>, |01>, |10>, |11>] (右側が q0)
 GATE_TEST_CASES = [
     # 固定ゲート（パラメータなし）
-    # h[0]: q0 を重ね合わせにするため、|00> と |10> に分散する -> インデックス 0 と 2
-    ("h", 0, None, [1/math.sqrt(2), 0, 1/math.sqrt(2), 0]),
-    # x[0]: q0 を反転 (|00> -> |10>) -> インデックス 2
-    ("x", 0, None, [0, 0, 1, 0]),
-    # x[1]: q1 を反転 (|00> -> |01>) -> インデックス 1
-    ("x", 1, None, [0, 1, 0, 0]),
+    # h[0]: q0 を重ね合わせにするため、|00> と |01> に分散する -> インデックス 0 と 1
+    ("h", 0, None, [1/math.sqrt(2), 1/math.sqrt(2), 0, 0]),
+    # x[0]: q0 を反転 (|00> -> |01>) -> インデックス 1
+    ("x", 0, None, [0, 1, 0, 0]),
+    # x[1]: q1 を反転 (|00> -> |10>) -> インデックス 2
+    ("x", 1, None, [0, 0, 1, 0]),
     # パラメトリックゲート（自動微分対象の角度あり）
-    # ry(pi/2)[1]: q1 を重ね合わせにするため、|00> と |01> に分散する -> インデックス 0 と 1
-    ("ry", 1, math.pi / 2, [1/math.sqrt(2), 1/math.sqrt(2), 0, 0]),
-    # ry(pi/4)[1]: q1 をわずかに回転 -> インデックス 0 と 1
-    ("ry", 1, math.pi / 4, [math.cos(math.pi/8), math.sin(math.pi/8), 0, 0]),
-    # rx(pi)[0]: q0 を反転させつつ位相変化 (|00> -> |10>) -> インデックス 2 が 1.0 になる
-    ("rx", 0, math.pi, [0, 0, 1, 0]),
+    # ry(pi/2)[1]: q1 を重ね合わせにするため、|00> と |10> に分散する -> インデックス 0 と 2
+    ("ry", 1, math.pi / 2, [1/math.sqrt(2), 0, 1/math.sqrt(2), 0]),
+    # ry(pi/4)[1]: q1 をわずかに回転 -> インデックス 0 と 2
+    ("ry", 1, math.pi / 4, [math.cos(math.pi/8), 0, math.sin(math.pi/8), 0]),
+    # rx(pi)[0]: q0 を反転させつつ位相変化 (|00> -> |01>) -> インデックス 1 が 1.0 になる
+    ("rx", 0, math.pi, [0, 1, 0, 0]),
 ]
 
 @pytest.mark.parametrize("gate_name, target, param, expected_abs", GATE_TEST_CASES)
