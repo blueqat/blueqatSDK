@@ -990,6 +990,83 @@ class ZZDagGate(TwoQubitGate):
         return torch.diag(torch.tensor([1, -1j, -1j, 1], dtype=torch.complex128))
 
 
+class ISwapGate(TwoQubitGate, IFallbackOperation):
+    """iSWAP gate: swaps two qubits and phases the swapped amplitudes by i."""
+    lowername = "iswap"
+
+    @classmethod
+    def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ISwapGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
+        return cls(targets)
+
+    def dagger(self):
+        return ISwapDagGate(self.targets)
+
+    def fallback(self, n_qubits):
+        return self._make_fallback_for_control_target_iter(
+            n_qubits,
+            lambda c, t: [SGate(c), SGate(t), HGate(c),
+                          CXGate((c, t)), CXGate((t, c)), HGate(t)])
+
+    def matrix(self):
+        # Symmetric in its two qubits, so the control/target bit convention
+        # doesn't matter: |01> <-> i|10>.
+        return torch.tensor([
+            [1, 0, 0, 0],
+            [0, 0, 1j, 0],
+            [0, 1j, 0, 0],
+            [0, 0, 0, 1]
+        ], dtype=torch.complex128)
+
+
+class ISwapDagGate(TwoQubitGate, IFallbackOperation):
+    """Dagger of iSWAP gate."""
+    lowername = "iswapdg"
+
+    @classmethod
+    def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ISwapDagGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
+        return cls(targets)
+
+    def dagger(self):
+        return ISwapGate(self.targets)
+
+    def fallback(self, n_qubits):
+        return self._make_fallback_for_control_target_iter(
+            n_qubits,
+            lambda c, t: [HGate(t), CXGate((t, c)), CXGate((c, t)),
+                          HGate(c), SDagGate(t), SDagGate(c)])
+
+    def matrix(self):
+        return torch.tensor([
+            [1, 0, 0, 0],
+            [0, 0, -1j, 0],
+            [0, -1j, 0, 0],
+            [0, 0, 0, 1]
+        ], dtype=torch.complex128)
+
+
+class Barrier(IFallbackOperation):
+    """Barrier: a no-op marker separating circuit sections (as in Qiskit and
+    OpenQASM). Simulation backends treat it as the identity via its empty
+    fallback; the QASM output backend emits a real `barrier` statement."""
+    lowername = "barrier"
+
+    @classmethod
+    def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'Barrier':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
+        return cls(targets)
+
+    def fallback(self, _):
+        return []
+
+    def dagger(self):
+        return self
+
+
 class Measurement(Operation):
     """Measurement operation"""
     lowername = "measure"

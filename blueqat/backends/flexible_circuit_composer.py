@@ -7,6 +7,16 @@ class FlexibleCircuitComposer:
         """
         self.max_block_size = max_block_size
 
+    def run(self, ops, n_qubits=None, max_block_size=None, **kwargs):
+        """Backend entry point so `Circuit.run(backend='composer')` works.
+        Returns the composed block list from `compose`."""
+        if max_block_size is not None:
+            self.max_block_size = max_block_size
+        return self.compose(ops, n_qubits)
+
+    def copy(self):
+        return FlexibleCircuitComposer(self.max_block_size)
+
     def compose(self, ops, n_qubits=None):
         """量子回路のゲート列（ops）をスキャンし、指定サイズ以下のブロックに集約する"""
         composed_blocks = []
