@@ -48,6 +48,8 @@ class QasmOutputBackend(Backend):
     gate_h = _one_qubit_gate_noargs
     gate_t = _one_qubit_gate_noargs
     gate_s = _one_qubit_gate_noargs
+    gate_sx = _one_qubit_gate_noargs
+    gate_sxdg = _one_qubit_gate_noargs
 
     def _two_qubit_gate_noargs(self, gate, ctx):
         for control, target in gate.control_target_iter(ctx[1]):
@@ -102,6 +104,30 @@ class QasmOutputBackend(Backend):
     def gate_cphase(self, gate, ctx):
         for c, t in gate.control_target_iter(ctx[1]):
             ctx[0].append(f"cp({gate.theta}) q[{c}],q[{t}];")
+        return ctx
+
+    def _two_qubit_gate_args_theta(self, gate, ctx):
+        for c, t in gate.control_target_iter(ctx[1]):
+            ctx[0].append(f"{gate.lowername}({gate.theta}) q[{c}],q[{t}];")
+        return ctx
+
+    gate_crx = _two_qubit_gate_args_theta
+    gate_cry = _two_qubit_gate_args_theta
+    gate_crz = _two_qubit_gate_args_theta
+    gate_rxx = _two_qubit_gate_args_theta
+    gate_ryy = _two_qubit_gate_args_theta
+    gate_rzz = _two_qubit_gate_args_theta
+
+    def gate_zz(self, gate, ctx):
+        # ZZ = diag(1, i, i, 1) = e^{i pi/4} * rzz(pi/2); QASM 2.0 can't express
+        # the global phase, so it's noted and dropped (same policy as gate_u).
+        for c, t in gate.control_target_iter(ctx[1]):
+            ctx[0].append(f"rzz(pi/2) q[{c}],q[{t}]; // global phase e^(i*pi/4) is ignored.")
+        return ctx
+
+    def gate_zzdg(self, gate, ctx):
+        for c, t in gate.control_target_iter(ctx[1]):
+            ctx[0].append(f"rzz(-pi/2) q[{c}],q[{t}]; // global phase e^(-i*pi/4) is ignored.")
         return ctx
 
     def _three_qubit_gate_noargs(self, gate, ctx):

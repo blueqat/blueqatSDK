@@ -54,7 +54,7 @@ def flatten(c: Circuit) -> Circuit:
         elif isinstance(op, g.Measurement):
             if op.key is None:
                 ops.extend([
-                    op.create(t, op.params, None) 
+                    op.create(t, op.params, None)
                     for t in op.target_iter(n_qubits)
                 ])
             else:
@@ -64,10 +64,14 @@ def flatten(c: Circuit) -> Circuit:
                 ops.append(
                     op.create(
                         tuple(t for t in op.target_iter(n_qubits)),
-                        op.params, 
+                        op.params,
                         options
                     )
                 )
+        elif isinstance(op, g.Gate):
+            # 3量子ビット以上のゲート (ccx/ccz/cswap 等)。これらの targets は
+            # スライス不可の明示的なタプルなので、そのまま新しい回路へ移せばよい。
+            ops.append(op.create(tuple(op.targets), op.params, None))
         else:
             raise ValueError(f"Cannot process operation {op.lowername}.")
             

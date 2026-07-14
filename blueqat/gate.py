@@ -317,6 +317,8 @@ class SGate(OneQubitGate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'SGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -336,6 +338,8 @@ class SDagGate(OneQubitGate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'SDagGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -355,6 +359,8 @@ class SXGate(OneQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'SXGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -370,6 +376,8 @@ class SXDagGate(OneQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'SXDagGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -385,6 +393,8 @@ class TGate(OneQubitGate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'TGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -407,6 +417,8 @@ class TDagGate(OneQubitGate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'TDagGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -429,6 +441,8 @@ class ToffoliGate(Gate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ToffoliGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -491,6 +505,8 @@ class XGate(OneQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'XGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -506,6 +522,8 @@ class YGate(OneQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'YGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -521,6 +539,8 @@ class ZGate(OneQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ZGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -540,6 +560,8 @@ class CCZGate(Gate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'CCZGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def fallback(self, n_qubits):
@@ -565,6 +587,8 @@ class CHGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'CHGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -696,6 +720,8 @@ class CSwapGate(Gate, IFallbackOperation):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'CSwapGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -759,6 +785,8 @@ class CXGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'CXGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -779,6 +807,8 @@ class CYGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'CYGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -799,6 +829,8 @@ class CZGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'CZGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -903,6 +935,8 @@ class SwapGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'SwapGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def matrix(self):
@@ -923,6 +957,8 @@ class ZZGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ZZGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):
@@ -943,6 +979,8 @@ class ZZDagGate(TwoQubitGate):
 
     @classmethod
     def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ZZDagGate':
+        if params or options:
+            raise ValueError(f"{cls.__name__} doesn't take parameters")
         return cls(targets)
 
     def dagger(self):

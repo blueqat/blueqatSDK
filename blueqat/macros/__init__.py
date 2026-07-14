@@ -27,20 +27,18 @@ from blueqat.gate import UGate
 
 @circuitmacro
 def draw(c: Circuit, **kwargs) -> Any:
-    """Draw the circuit. This function requires Qiskit."""
-    return c.run(backend='ibmq', returns="draw", **kwargs)
+    """Draw the circuit with the built-in matplotlib-based drawer."""
+    return c.run(backend='draw', **kwargs)
 
 
 @circuitmacro
-def margolus(c: Circuit, c0: int, c1: int) -> Circuit:
+def margolus(c: Circuit, c0: int, c1: int, t: int) -> Circuit:
     """Simplified Toffoli gate implementation by Margolus.
 
     This gate is also as know as relative Toffoli gate.
     It's almost as same as Toffoli gate, but only relative phases are different.
     Refer https://arxiv.org/abs/quant-ph/0312225v1 for details.
     (Remarks: It's also described in Nielsen & Chuang, Exercise 4.26.)"""
-    # 注: 元コードに変数 t の定義がない、あるいは c1, c0 などの使われ方に
-    # 依存する部分がありますが、提示されたロジックをそのまま維持しています。
     c.ry(math.pi * 0.25)[t].cx[c1, t].ry(math.pi * 0.25)[t].cx[c0, t]
     c.ry(math.pi * -0.25)[t].cx[c1, t].ry(math.pi * -0.25)[t]
     return c
