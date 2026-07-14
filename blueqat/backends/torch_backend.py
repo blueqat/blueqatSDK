@@ -116,12 +116,15 @@ class TorchBackend(Backend):
             'swap': lambda dev, dt: torch.tensor([[1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]], dtype=dt, device=dev).view(2,2,2,2),
             
             # 💡 CRZゲート(動的関数)
-            'crz': lambda dev, dt: lambda gate: (lambda theta=torch.as_tensor(getattr(gate, 'theta', 0.0), dtype=torch.float64, device=dev): torch.tensor([
-                [1.0+0.0j, 0.0+0.0j, 0.0+0.0j, 0.0+0.0j],
-                [0.0+0.0j, 1.0+0.0j, 0.0+0.0j, 0.0+0.0j],
-                [0.0+0.0j, 0.0+0.0j, torch.exp(-1j * theta * 0.5), 0.0+0.0j],
-                [0.0+0.0j, 0.0+0.0j, 0.0+0.0j, torch.exp(1j * theta * 0.5)]
-            ], dtype=dt, device=dev).view(2, 2, 2, 2))()
+            # 💡 torch.tensor([...]) にテンソル要素をリストで渡すと計算グラフが切断される
+            #    (tensornet モードはこれがデフォルトのため autograd が壊れていた)。
+            #    CRZGate.matrix() と同じく torch.diag(torch.stack([...])) で組んで勾配を維持する。
+            'crz': lambda dev, dt: lambda gate: (lambda theta=torch.as_tensor(getattr(gate, 'theta', 0.0), dtype=torch.float64, device=dev): torch.diag(torch.stack([
+                torch.ones((), dtype=dt, device=dev),
+                torch.ones((), dtype=dt, device=dev),
+                torch.exp(-1j * theta * 0.5).to(dt),
+                torch.exp(1j * theta * 0.5).to(dt),
+            ])).view(2, 2, 2, 2))()
         }
 
     def _run_inner(self, ctx: TorchBackendContext, gates: List[Operation], n_qubits: int) -> TorchBackendContext:
@@ -541,21 +544,27 @@ class TorchBackend(Backend):
         ctx = self._run_inner(ctx, gates, n_qubits)
 
         # 💡 【1つの確率振幅の要求時】
-        if ctx.mode == "tensornet" and (returns == "amplitude" or "amplitude" in kwargs):
+        # 💡 以前は tensornet モードのみ対応しており、statevector モードでは黙って無視され
+        #    全状態ベクトルが返っていた。両モードで対応する。
+        if returns == "amplitude" or "amplitude" in kwargs:
             target_bitstr = kwargs.get("amplitude", "0" * n_qubits)
             bit_list = [int(b) for b in reversed(target_bitstr)]
-            
+
+            if ctx.mode == "statevector":
+                index = sum(bit << i for i, bit in enumerate(bit_list))
+                return ctx.state[index]
+
             contract_args = []
             for t, idxs in zip(ctx.tensors, ctx.tensor_indices):
                 contract_args.append(t)
                 contract_args.append(idxs)
-                
+
             for i, bit in enumerate(bit_list):
                 meas_vector = torch.zeros(2, dtype=target_dtype, device=device)
                 meas_vector[bit] = 1.0
                 contract_args.append(meas_vector)
                 contract_args.append([ctx.current_qubit_axis[i]])
-                
+
             contract_args.append([])
             result_tensor = oe.contract(*contract_args, backend="torch")
             return result_tensor
@@ -617,10 +626,15 @@ class TorchBackend(Backend):
         keep_mask = (1 << n_qubits) - 1 if measured_qubits is None else sum(1 << q for q in measured_qubits)
 
         if ctx.mode == "statevector" or (ctx.mode == "tensornet" and n_qubits <= 28):
-            # flattened_state は既に完全展開・標準順序に変換済みなので、そのまま多項分布サンプリングできる
+            # flattened_state は既に完全展開・標準順序に変換済みなので、そのままサンプリングできる。
+            # 💡 torch.multinomial はカテゴリ数が 2^24 を超えると使えない (n_qubits >= 25 でクラッシュ
+            #    する)。逆CDFサンプリング (cumsum + searchsorted) はカテゴリ数の上限がないためこちらを使う。
             with torch.no_grad():
                 probs = torch.abs(flattened_state) ** 2
-                samples = torch.multinomial(probs, n_shots, replacement=True)
+                cdf = torch.cumsum(probs, dim=0)
+                cdf[-1] = 1.0  # 浮動小数点誤差でcdf[-1]が1未満になるのを防ぐ
+                u = torch.rand(n_shots, device=probs.device, dtype=probs.dtype)
+                samples = torch.searchsorted(cdf, u)
                 samples &= keep_mask
             fmt = f"0{n_qubits}b"
             for idx in samples.tolist():

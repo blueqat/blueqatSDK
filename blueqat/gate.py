@@ -16,6 +16,7 @@
 Modernized for PyTorch Tensor Network integration in 2026.
 """
 
+import cmath
 import math
 from typing import Any, cast, Callable, Iterable, Iterator, List, NoReturn, Optional, Tuple, Type, TypeVar, Union
 
@@ -225,12 +226,12 @@ class PhaseGate(OneQubitGate):
 
     def matrix(self):
         theta = torch.as_tensor(self.theta, dtype=torch.complex128)
-        elements = torch.stack([
-            torch.tensor(1.0, dtype=torch.complex128),
-            torch.tensor(0.0, dtype=torch.complex128),
-            torch.tensor(0.0, dtype=torch.complex128),
-            torch.exp(1j * theta)
-        ])
+        # ones_like/zeros_like inherit theta's device, unlike a bare
+        # torch.tensor(...) literal (always CPU), which would crash torch.stack
+        # with a device mismatch if theta lives on e.g. CUDA/MPS.
+        one = torch.ones_like(theta)
+        zero = torch.zeros_like(theta)
+        elements = torch.stack([one, zero, zero, torch.exp(1j * theta)])
         return elements.reshape(2, 2)
 
 
@@ -305,7 +306,7 @@ class RZGate(OneQubitGate):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
         a = torch.exp(-1j * t)
         b = torch.exp(1j * t)
-        zero = torch.tensor(0.0, dtype=torch.complex128)
+        zero = torch.zeros_like(t)
         elements = torch.stack([a, zero, zero, b])
         return elements.reshape(2, 2)
 
@@ -393,7 +394,11 @@ class TGate(OneQubitGate, IFallbackOperation):
         return [PhaseGate(self.targets, math.pi / 4)]
 
     def matrix(self):
-        return torch.tensor([[1, 0], [0, torch.exp(torch.tensor(math.pi * 0.25j))]], dtype=torch.complex128)
+        # cmath.exp on a Python complex keeps full double precision; wrapping the
+        # angle in torch.tensor(...) first creates a complex64 intermediate (torch's
+        # default complex dtype for a scalar built from a Python complex), losing
+        # ~8 significant digits before torch.exp ever runs.
+        return torch.tensor([[1, 0], [0, cmath.exp(math.pi * 0.25j)]], dtype=torch.complex128)
 
 
 class TDagGate(OneQubitGate, IFallbackOperation):
@@ -411,7 +416,7 @@ class TDagGate(OneQubitGate, IFallbackOperation):
         return [PhaseGate(self.targets, -math.pi / 4)]
 
     def matrix(self):
-        return torch.tensor([[1, 0], [0, torch.exp(torch.tensor(math.pi * -0.25j))]], dtype=torch.complex128)
+        return torch.tensor([[1, 0], [0, cmath.exp(math.pi * -0.25j)]], dtype=torch.complex128)
 
 
 class ToffoliGate(Gate, IFallbackOperation):
@@ -434,9 +439,12 @@ class ToffoliGate(Gate, IFallbackOperation):
         return [HGate(t), CCZGate((c1, c2, t)), HGate(t)]
 
     def matrix(self):
+        # targets = (c1, c2, t) uses the same control=least-significant-bit
+        # convention as CXGate.matrix() (index = t*4 + c2*2 + c1), so the flipped
+        # pair is where both controls are 1 (indices 3 and 7), not 6 and 7.
         m = torch.eye(8, dtype=torch.complex128)
-        m[6, 6], m[6, 7] = 0, 1
-        m[7, 6], m[7, 7] = 1, 0
+        m[3, 3], m[3, 7] = 0, 1
+        m[7, 3], m[7, 7] = 1, 0
         return m
 
 
@@ -589,12 +597,8 @@ class CPhaseGate(TwoQubitGate):
 
     def matrix(self):
         theta = torch.as_tensor(self.theta, dtype=torch.complex128)
-        return torch.diag(torch.stack([
-            torch.tensor(1.0, dtype=torch.complex128),
-            torch.tensor(1.0, dtype=torch.complex128),
-            torch.tensor(1.0, dtype=torch.complex128),
-            torch.exp(1j * theta)
-        ]))
+        one = torch.ones_like(theta)
+        return torch.diag(torch.stack([one, one, one, torch.exp(1j * theta)]))
 
 
 class CRXGate(TwoQubitGate):
@@ -616,9 +620,9 @@ class CRXGate(TwoQubitGate):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
         cos_t = torch.cos(t)
         isin_t = -1j * torch.sin(t)
-        zero = torch.tensor(0.0, dtype=torch.complex128)
-        one = torch.tensor(1.0, dtype=torch.complex128)
-        
+        zero = torch.zeros_like(t)
+        one = torch.ones_like(t)
+
         elements = torch.stack([
             one, zero, zero, zero,
             zero, cos_t, zero, isin_t,
@@ -647,9 +651,9 @@ class CRYGate(TwoQubitGate):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
         cos_t = torch.cos(t)
         sin_t = torch.sin(t)
-        zero = torch.tensor(0.0, dtype=torch.complex128)
-        one = torch.tensor(1.0, dtype=torch.complex128)
-        
+        zero = torch.zeros_like(t)
+        one = torch.ones_like(t)
+
         elements = torch.stack([
             one, zero, zero, zero,
             zero, cos_t, zero, -sin_t,
@@ -678,12 +682,8 @@ class CRZGate(TwoQubitGate):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
         a = torch.exp(-1j * t)
         b = torch.exp(1j * t)
-        return torch.diag(torch.stack([
-            torch.tensor(1.0, dtype=torch.complex128),
-            a,
-            torch.tensor(1.0, dtype=torch.complex128),
-            b
-        ]))
+        one = torch.ones_like(t)
+        return torch.diag(torch.stack([one, a, one, b]))
 
 
 class CSwapGate(Gate, IFallbackOperation):
@@ -706,9 +706,12 @@ class CSwapGate(Gate, IFallbackOperation):
         return [CXGate((t2, t1)), ToffoliGate((c, t1, t2)), CXGate((t2, t1))]
 
     def matrix(self):
+        # targets = (c, t1, t2), same LSB-first convention as ToffoliGate.matrix()
+        # (index = t2*4 + t1*2 + c): the swapped pair is where c=1 and exactly one
+        # of t1/t2 is set, i.e. indices 3 (t1=1,t2=0) and 5 (t1=0,t2=1).
         m = torch.eye(8, dtype=torch.complex128)
-        m[5, 5], m[5, 6] = 0, 1
-        m[6, 5], m[6, 6] = 1, 0
+        m[3, 3], m[3, 5] = 0, 1
+        m[5, 3], m[5, 5] = 1, 0
         return m
 
 
@@ -738,8 +741,8 @@ class CUGate(TwoQubitGate):
 
         cos_t = torch.cos(0.5 * t)
         sin_t = torch.sin(0.5 * t)
-        zero = torch.tensor(0.0, dtype=torch.complex128)
-        one = torch.tensor(1.0, dtype=torch.complex128)
+        zero = torch.zeros_like(t)
+        one = torch.ones_like(t)
 
         elements = torch.stack([
             one, zero, zero, zero,
@@ -784,7 +787,7 @@ class CYGate(TwoQubitGate):
     def matrix(self):
         return torch.tensor([
             [1, 0, 0, 0],
-            [0, 0, -1j, 0],
+            [0, 0, 0, -1j],
             [0, 0, 1, 0],
             [0, 1j, 0, 0]
         ], dtype=torch.complex128)
@@ -829,8 +832,8 @@ class RXXGate(TwoQubitGate):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
         cos_t = torch.cos(t)
         isin_t = -1j * torch.sin(t)
-        zero = torch.tensor(0.0, dtype=torch.complex128)
-        
+        zero = torch.zeros_like(t)
+
         elements = torch.stack([
             cos_t, zero, zero, isin_t,
             zero, cos_t, isin_t, zero,
@@ -859,8 +862,8 @@ class RYYGate(TwoQubitGate):
         t = torch.as_tensor(self.theta, dtype=torch.complex128) * 0.5
         cos_t = torch.cos(t)
         isin_t = 1j * torch.sin(t)
-        zero = torch.tensor(0.0, dtype=torch.complex128)
-        
+        zero = torch.zeros_like(t)
+
         elements = torch.stack([
             cos_t, zero, zero, isin_t,
             zero, cos_t, -isin_t, zero,
@@ -923,10 +926,30 @@ class ZZGate(TwoQubitGate):
         return cls(targets)
 
     def dagger(self):
-        return self
+        # matrix() is diag(1, 1j, 1j, 1), which is not Hermitian (its own conjugate
+        # transpose is diag(1, -1j, -1j, 1) != itself), so the dagger is a distinct gate.
+        return ZZDagGate(self.targets)
 
     def matrix(self):
         return torch.diag(torch.tensor([1, 1j, 1j, 1], dtype=torch.complex128))
+
+
+class ZZDagGate(TwoQubitGate):
+    """Dagger of ZZ gate"""
+    lowername = "zzdg"
+
+    def __init__(self, targets):
+        super().__init__(targets, ())
+
+    @classmethod
+    def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ZZDagGate':
+        return cls(targets)
+
+    def dagger(self):
+        return ZZGate(self.targets)
+
+    def matrix(self):
+        return torch.diag(torch.tensor([1, -1j, -1j, 1], dtype=torch.complex128))
 
 
 class Measurement(Operation):

@@ -44,6 +44,10 @@ class MockTerm:
     def n_iter(self):
         return [op.n for op in self.ops]
 
+    def simplify(self):
+        # Each mock term here only ever touches one qubit, so there's nothing to merge.
+        return self
+
 
 class MockHamiltonian:
     def __init__(self, terms: list):
@@ -60,7 +64,7 @@ class MockHamiltonian:
                     max_idx = op.n
         return max_idx
 
-    def to_matrix(self, sparse: bool = True, device: torch.device = None) -> torch.Tensor:
+    def to_matrix(self, n_qubits: int = -1, *, sparse: bool = True, device: torch.device = None) -> torch.Tensor:
         """メジャーアップデート後のBlueqatのエンディアン仕様に合わせてダミー行列を作成。
         Qubit 0が右側、Qubit 1が左側になるため、クロネッカー積の順序を反転させます。
         """
