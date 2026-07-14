@@ -19,6 +19,7 @@ Runnable scripts in [`examples/`](examples/):
 - `vqe_ground_state.py` -- VQE with a custom `AnsatzBase` (not tied to QAOA)
 - `maxcut_qaoa.py` -- QAOA for the graph Max-Cut problem
 - `numpartition_qaoa.py` -- QAOA for number partitioning
+- `exchange_only.py` -- exchange-only spin qubits: logical circuits from pure exchange pulses
 
 ### Install
 ```
@@ -131,6 +132,27 @@ Circuit(2).h[0].cx[0, 1].probs()        # measurement probabilities (differentia
 Circuit(2).h[0].cx[0, 1].probs([1])     # marginal on selected qubits
 Circuit(2).h[0].cx[0, 1].depth()        # => 2
 Circuit(2).h[0].cx[0, 1].count_ops()    # => Counter({'h': 1, 'cx': 1})
+```
+
+### Exchange-only spin qubits (silicon quantum dots)
+```python
+import blueqat.eo                      # registers the 'eo' backend
+from blueqat.eo import encoding, synthesize_1q
+
+# The native hardware primitive: a Heisenberg exchange pulse
+Circuit(2).exch(math.pi)[0, 1]         # theta = pi is an exact SWAP
+
+# Transpile a logical circuit into pure exchange pulses
+# (3 spins per logical qubit; H = 3 pulses, Fong-Wandzura CNOT = 28 pulses)
+physical = Circuit(2).h[0].cx[0, 1].run(backend='eo')
+
+# Run the pulses on the encoded state and inspect the logical result
+init = encoding.encode_state([(1, 0), (1, 0)])   # |00>_L
+final = physical.run(initial=init)
+encoding.leakage(final, 0)                       # leakage out of the code space
+
+# Differentiable pulse synthesis: any SU(2) in 4 constant-amplitude pulses
+seq = synthesize_1q(target_2x2_unitary, n_pulses=4)
 ```
 
 ### Cloud access (API key groundwork)

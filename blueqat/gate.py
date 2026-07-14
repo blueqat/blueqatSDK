@@ -1048,6 +1048,53 @@ class ISwapDagGate(TwoQubitGate, IFallbackOperation):
         ], dtype=torch.complex128)
 
 
+class ExchangeGate(TwoQubitGate, IFallbackOperation):
+    """Heisenberg exchange pulse, the native primitive of exchange-only (EO)
+    spin-qubit hardware: U(theta) = exp(-i theta/2 (SWAP - I)), i.e. identity
+    on the triplet (symmetric) subspace and phase e^{i theta} on the singlet.
+
+    theta = J*t is the integrated pulse area (exchange integral x duration);
+    theta = pi gives an exact SWAP, theta = pi/2 a sqrt-SWAP up to phase.
+    Symmetric in its two qubits."""
+    lowername = "exch"
+
+    def __init__(self, targets, theta):
+        super().__init__(targets, (theta, ))
+        self.theta = theta
+
+    @classmethod
+    def create(cls, targets: Targets, params: tuple, options: Optional[dict] = None) -> 'ExchangeGate':
+        if options:
+            raise ValueError(f"{cls.__name__} doesn't take options")
+        return cls(targets, params[0])
+
+    def dagger(self):
+        return ExchangeGate(self.targets, -self.theta)
+
+    def fallback(self, n_qubits):
+        # SWAP - I = (XX + YY + ZZ - I)/2, so U(theta) equals
+        # rxx(theta/2) ryy(theta/2) rzz(theta/2) up to global phase e^{i theta/4}.
+        return self._make_fallback_for_control_target_iter(
+            n_qubits,
+            lambda c, t: [RXXGate((c, t), self.theta * 0.5),
+                          RYYGate((c, t), self.theta * 0.5),
+                          RZZGate((c, t), self.theta * 0.5)])
+
+    def matrix(self):
+        theta = torch.as_tensor(self.theta, dtype=torch.complex128)
+        one = torch.ones_like(theta)
+        zero = torch.zeros_like(theta)
+        a = (one + torch.exp(1j * theta)) * 0.5
+        b = (one - torch.exp(1j * theta)) * 0.5
+        elements = torch.stack([
+            one, zero, zero, zero,
+            zero, a, b, zero,
+            zero, b, a, zero,
+            zero, zero, zero, one
+        ])
+        return elements.reshape(4, 4)
+
+
 class Barrier(IFallbackOperation):
     """Barrier: a no-op marker separating circuit sections (as in Qiskit and
     OpenQASM). Simulation backends treat it as the identity via its empty
