@@ -215,9 +215,13 @@ class Term(_TermTuple):
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, _PauliImpl): other = other.to_term()
-        return _TermTuple.__eq__(self.simplify(), other.simplify()) if isinstance(other, Term) else False
+        if isinstance(other, Term): return _TermTuple.__eq__(self.simplify(), other.simplify())
+        if isinstance(other, Expr): return NotImplemented  # let Expr.__eq__(other, self) handle it
+        return False
 
-    def __ne__(self, other: Any) -> bool: return not self.__eq__(other)
+    def __ne__(self, other: Any) -> bool:
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
 
     def to_term(self) -> 'Term': return self
     def to_expr(self) -> 'Expr': return Expr.from_term(self)
@@ -241,7 +245,10 @@ class Term(_TermTuple):
                 k *= _k
             new_coeff = new_coeff * k
             if isinstance(new_coeff, torch.Tensor):
-                if new_coeff.imag == 0: new_coeff = new_coeff.real
+                # .imag raises for non-complex dtypes, so only touch it when the
+                # tensor is actually complex (e.g. a real theta*Z[0] coefficient
+                # that never got promoted to complex must be left alone).
+                if torch.is_complex(new_coeff) and new_coeff.imag == 0: new_coeff = new_coeff.real
             elif isinstance(new_coeff, complex) and new_coeff.imag == 0:
                 new_coeff = new_coeff.real
             if op != "I": new_ops.append(pauli_from_char(op, n))
@@ -309,7 +316,15 @@ class Expr(_ExprTuple):
     def from_term(term: Term) -> 'Expr': return Expr((term, ))
     @staticmethod
     def from_terms_iter(terms: Any) -> 'Expr': return Expr(tuple(term for term in terms))
-    def terms_to_dict(self) -> dict: return {term[0]: term[1] for term in self.terms}
+    def terms_to_dict(self) -> dict:
+        # Sum coefficients on collision rather than overwrite: a plain dict
+        # comprehension would silently drop earlier terms if self.terms ever
+        # contains duplicate `ops` keys (e.g. an Expr built via from_terms_iter
+        # with unmerged input).
+        d: dict = {}
+        for op, coeff in self.terms:
+            d[op] = d[op] + coeff if op in d else coeff
+        return d
     @staticmethod
     def from_terms_dict(terms_dict: dict) -> 'Expr': return Expr(tuple(Term(k, v) for k, v in terms_dict.items()))
     @staticmethod
@@ -547,70 +562,63 @@ class AnsatzBase:
         self.sparse: Optional[torch.Tensor] = None
 
     def make_sparse(self, sparse: bool = True, device: Optional[torch.device] = None) -> None:
-        self.sparse = self.hamiltonian.to_matrix(sparse=sparse, device=device)
+        # self.n_qubits may be wider than the hamiltonian's own qubit span (e.g. an
+        # init_circuit with extra/ancilla qubits), so it must be passed explicitly --
+        # otherwise to_matrix() infers a narrower width and later matrix-vector ops
+        # against the full-width statevector fail with a dimension mismatch.
+        self.sparse = self.hamiltonian.to_matrix(self.n_qubits, sparse=sparse, device=device)
 
     def get_circuit(self, params: torch.Tensor) -> Circuit: raise NotImplementedError
 
     def get_energy(self, circuit: Circuit, sampler: Callable[[Circuit, typing.Iterable[int]], Dict[Tuple[int, ...], float]]) -> torch.Tensor:
-        """Calculate energy expectation value from circuit and sampler with Autograd support."""
-        target_device = torch.device('cpu')
-        val = torch.zeros(1, dtype=torch.float64)
+        """Calculate energy expectation value from circuit and sampler with Autograd support.
 
-        for meas in self.hamiltonian:
-            coeff_val = meas.coeff.item() if isinstance(meas.coeff, torch.Tensor) else float(meas.coeff)
-            
+        Whether the result carries a gradient back to `circuit`'s parameters depends
+        on `sampler`: an exact sampler (e.g. `non_sampling_sampler`) keeps the
+        autograd graph intact, while a genuinely stochastic one (e.g. one built from
+        `get_measurement_sampler`) does not -- real shot noise isn't differentiable,
+        so that is expected, not a bug.
+        """
+        val: Any = 0.0
+
+        for raw_meas in self.hamiltonian:
+            # Merge any operators sharing a qubit (e.g. X[0]*Z[0] -> -1j*Y[0]) into a
+            # single effective Pauli per qubit first. Without this, a term touching
+            # the same qubit more than once would get an extra basis rotation applied
+            # to it and would have that qubit's bit counted more than once in the
+            # parity check below, corrupting the sign of the contribution.
+            meas = raw_meas.simplify()
+            coeff_val = meas.coeff if isinstance(meas.coeff, torch.Tensor) else complex(meas.coeff)
+
             # 1. 定数項（Iのみ）の処理
             if not meas.ops:
                 val = val + coeff_val
                 continue
 
             # 2. この項に関係する全ての量子ビットを特定
-            active_qubits = sorted(list(set(op.n for op in meas.ops)))
-            n_qubits = max(active_qubits) + 1
-            if n_qubits < circuit.n_qubits:
-                n_qubits = circuit.n_qubits
+            active_qubits = sorted(op.n for op in meas.ops)
+            n_qubits = max(max(active_qubits) + 1, circuit.n_qubits)
 
             # 3. 各項ごとに完全に独立した測定用回路を作成
             c = Circuit(n_qubits)
             c.ops = list(circuit.ops)
-            
+
             for op in meas.ops:
                 if op.op == "X":
                     c.h[op.n]
                 elif op.op == "Y":
-                    c.rx(torch.tensor(-torch.pi / 2, dtype=torch.float64, device=target_device))[op.n]
+                    c.rx(torch.tensor(-torch.pi / 2, dtype=torch.float64))[op.n]
 
-            # サンプラーを実行（テストコードとの同期用）
-            _ = sampler(c, active_qubits)
-            
-            # 計算グラフ（grad_fn）を維持した、基底変換後の確率分布
-            transformed_state = c.run()
-            if target_device != transformed_state.device:
-                target_device = transformed_state.device
-                val = val.to(target_device)
-                
-            transformed_probs = torch.abs(transformed_state) ** 2
+            # 4. サンプラーが返す (測定qubitごとのbit tuple -> 確率) を実際に消費し、
+            #    各qubitの1ビットのパリティで符号を決めて集計する
+            #    (simplify() 済みなので active_qubits は重複なく meas.ops と1対1)
+            for bits, prob in sampler(c, active_qubits).items():
+                parity = sum(bits) % 2
+                val = val + (-prob * coeff_val if parity else prob * coeff_val)
 
-            # 4. 全状態空間をループし、パウリ演算子の符号（パリティ）を正しく判定して集計
-            # これにより、サンプラーのエンディアン依存性を完全に排除し、数学的に厳密な期待値を得ます
-            dim = 2 ** n_qubits
-            for state_idx in range(dim):
-                prob_tensor = transformed_probs[state_idx]
-                
-                # 各演算子の量子ビットに対応するビット値を抽出し、パリティ（1の個数）をカウント
-                parity_count = 0
-                for op in meas.ops:
-                    # state_idx の op.n 番目のビットが 1 かどうかを判定
-                    if (state_idx >> op.n) & 1:
-                        parity_count += 1
-                
-                # パリティが奇数なら期待値はマイナス、偶数ならプラス
-                if parity_count % 2 == 1:
-                    val = val - prob_tensor * coeff_val
-                else:
-                    val = val + prob_tensor * coeff_val
-                    
-        return val.squeeze()
+        if isinstance(val, torch.Tensor):
+            return (val.real if torch.is_complex(val) else val).squeeze()
+        return torch.tensor(val.real if isinstance(val, complex) else val, dtype=torch.float64)
 
     def get_energy_sparse(self, circuit: Circuit) -> torch.Tensor:
         return sparse_expectation(self.sparse, circuit.run())
@@ -624,8 +632,14 @@ class AnsatzBase:
 
 class QaoaAnsatz(AnsatzBase):
     def __init__(self, hamiltonian: Any, step: int = 1, init_circuit: Optional[Circuit] = None, mixer: Optional[Any] = None) -> None:
+        # Convert to Expr before super().__init__, which immediately calls
+        # .max_n() on it -- a bare Pauli operator like Z[0] (as opposed to a
+        # Term/Expr) doesn't have that method and would raise AttributeError.
+        hamiltonian = hamiltonian.to_expr().simplify()
         super().__init__(hamiltonian, step * 2)
-        self.hamiltonian = hamiltonian.to_expr().simplify()
+        self.hamiltonian = hamiltonian
+        if not self.check_hamiltonian():
+            raise ValueError("Hamiltonian terms are not commutable")
         self.step = step
         self.n_qubits = self.hamiltonian.max_n() + 1
         
@@ -639,6 +653,12 @@ class QaoaAnsatz(AnsatzBase):
         self.mixer = mixer
         self.time_evolutions = [term.get_time_evolution() for term in self.hamiltonian]
         self.mixer_time_evolutions = [term.get_time_evolution() for term in self.mixer] if mixer else []
+
+    def check_hamiltonian(self) -> bool:
+        """Check hamiltonian is commutable. This condition is required for QaoaAnsatz,
+        since get_circuit Trotterizes e^{-iHt} into a per-term product of time
+        evolutions -- exact only when every term commutes with every other term."""
+        return self.hamiltonian.is_all_terms_commutable()
 
     def get_circuit(self, params: torch.Tensor) -> Circuit:
         c = self.init_circuit.copy()
@@ -668,7 +688,12 @@ class VqeResult:
         if sampler is None and self.vqe is not None: sampler = self.vqe.sampler
         if self.circuit is None: raise ValueError("No circuit available.")
 
-        probs = expect(self.circuit.run(), range(self.circuit.n_qubits)) if sampler is None else sampler(self.circuit, range(self.circuit.n_qubits))
+        raw_probs = expect(self.circuit.run(), range(self.circuit.n_qubits)) if sampler is None else sampler(self.circuit, range(self.circuit.n_qubits))
+        # get_probs()/most_common() are reporting APIs (sorting, printing, equality
+        # checks against plain dicts), not part of an autograd graph, so normalize
+        # to plain floats regardless of whether expect() or a custom sampler handed
+        # back tensors.
+        probs = {k: (v.item() if isinstance(v, torch.Tensor) else v) for k, v in raw_probs.items()}
         if store: self._probs = probs
         return probs
 
@@ -713,15 +738,22 @@ class Vqe:
         return self._result
 
 
-def expect(qubits: torch.Tensor, meas: typing.Iterable[int]) -> Dict[Tuple[int, ...], float]:
+def expect(qubits: torch.Tensor, meas: typing.Iterable[int]) -> Dict[Tuple[int, ...], torch.Tensor]:
+    """Marginal probabilities of `meas` qubits, as gradient-carrying tensors (not
+    plain floats) so that `AnsatzBase.get_energy` can backprop through them when
+    `qubits` came from a differentiable circuit run."""
     meas_tuple = tuple(meas)
     mask = reduce(lambda acc, v: acc | (1 << v), meas_tuple, 0)
-    cnt = defaultdict(float)
+    cnt: Dict[int, torch.Tensor] = {}
     probs = torch.abs(qubits) ** 2
-    
+
     for i, p_val in enumerate(probs):
-        p = p_val.item()
-        if p != 0.0: cnt[i & mask] += p
+        # .item() here is only a control-flow check (skip exactly-zero-probability
+        # outcomes, matching the previous behavior); p_val itself -- what actually
+        # gets accumulated -- stays a tensor so the gradient is preserved.
+        if p_val.item() == 0.0: continue
+        key = i & mask
+        cnt[key] = cnt[key] + p_val if key in cnt else p_val
     return {tuple(1 if k & (1 << i) else 0 for i in meas_tuple): val for k, val in cnt.items()}
 
 def non_sampling_sampler(circuit: Circuit, meas: typing.Iterable[int]) -> Dict[Tuple[int, ...], float]:

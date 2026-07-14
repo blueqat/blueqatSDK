@@ -48,20 +48,21 @@ class Circuit:
 
     def __get_backend(self, backend_name):
         from blueqat.backends import BACKENDS
-        
+        from blueqat.backends.backendbase import _BACKEND_REGISTRY, get_backend
+
         try:
             return self._backends[backend_name]
         except KeyError:
             backend = BACKENDS.get(backend_name)
-            if backend is None:
-                raise ValueError(f"Backend {backend_name} doesn't exist.")
-            # インスタンス化してキャッシュ
-            if isinstance(backend, type):
+            if backend is not None:
+                # インスタンス化してキャッシュ（型でもファクトリlambdaでも呼び出しは同じ）
                 self._backends[backend_name] = backend()
-            else:
-                # lambda関数（ファクトリ）などの場合は呼び出す
-                self._backends[backend_name] = backend()
-            return self._backends[backend_name]
+                return self._backends[backend_name]
+            if backend_name in _BACKEND_REGISTRY:
+                # register_backend()経由で登録されたプラグインバックエンド
+                self._backends[backend_name] = get_backend(backend_name)
+                return self._backends[backend_name]
+            raise ValueError(f"Backend {backend_name} doesn't exist.")
 
     def __backend_runner_wrapper(self, backend_name: str) -> Callable:
         backend = self.__get_backend(backend_name)
@@ -81,8 +82,9 @@ class Circuit:
         if name.startswith("run_with_"):
             # メソッド内部で遅延インポート
             from blueqat.backends import BACKENDS
+            from blueqat.backends.backendbase import _BACKEND_REGISTRY
             backend_name = name[9:]
-            if backend_name in BACKENDS:
+            if backend_name in BACKENDS or backend_name in _BACKEND_REGISTRY:
                 return self.__backend_runner_wrapper(backend_name)
             raise AttributeError(f"Backend '{backend_name}' does not exist.")
         raise AttributeError(
@@ -308,7 +310,7 @@ class BlueqatGlobalSetting:
                 raise ValueError(f"Gate '{name}' already exists in gate set.")
             if name in GLOBAL_MACROS:
                 raise ValueError(f"Macro '{name}' already exists.")
-            register_operation(name, gateclass)
+        register_operation(name, gateclass)
 
     @staticmethod
     def unregister_gate(name: str) -> None:
