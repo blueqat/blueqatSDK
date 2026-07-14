@@ -13,6 +13,9 @@ https://github.com/Blueqat/Blueqat-tutorials
 ### Examples
 Runnable scripts in [`examples/`](examples/):
 - `bell_state.py` -- circuit basics: statevector, single amplitude, shot sampling
+- `teleportation.py` -- quantum teleportation, coherent and measured versions
+- `grover_search.py` -- Grover's search over 8 items with oracle + diffusion
+- `qft.py` -- Quantum Fourier Transform vs. the DFT matrix, period readout
 - `vqe_ground_state.py` -- VQE with a custom `AnsatzBase` (not tied to QAOA)
 - `maxcut_qaoa.py` -- QAOA for the graph Max-Cut problem
 - `numpartition_qaoa.py` -- QAOA for number partitioning

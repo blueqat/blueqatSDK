@@ -112,16 +112,20 @@ class Circuit:
         return copied
 
     def dagger(self, ignore_measurement: bool = False) -> 'Circuit':
-        """Make Hermitian conjugate of the circuit."""
+        """Make Hermitian conjugate of the circuit.
+
+        If the circuit contains measurement or reset (which have no Hermitian
+        conjugate), ValueError is raised, unless `ignore_measurement` is True,
+        in which case those operations are simply dropped."""
         ops = []
         for g in reversed(self.ops):
-            try:
-                ops.append(g.dagger())
-            except ValueError:
-                if not ignore_measurement:
-                    raise ValueError(
-                        'Cannot make the Hermitian conjugate of this circuit because '
-                        'the circuit contains measurement.')
+            if not hasattr(g, 'dagger'):
+                if ignore_measurement:
+                    continue
+                raise ValueError(
+                    'Cannot make the Hermitian conjugate of this circuit because '
+                    f'the circuit contains a non-invertible operation `{g.lowername}`.')
+            ops.append(g.dagger())
 
         copied = Circuit(self.n_qubits, ops)
         return copied

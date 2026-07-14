@@ -35,11 +35,11 @@ if __name__ == "__main__":
     print(f"Numbers: {nums} (total: {sum(nums)})")
 
     hamiltonian = numpartition_hamiltonian(nums)
-    vqe = Vqe(QaoaAnsatz(hamiltonian, step=3))
+    vqe = Vqe(QaoaAnsatz(hamiltonian, step=4))
     result = vqe.run(max_iter=500)
 
     # Look at the top candidates and keep the best-balanced one.
-    candidates = result.most_common(5)
+    candidates = result.most_common(10)
     best_bits, best_diff = None, None
     for bits, _ in candidates:
         group0 = [x for x, b in zip(nums, bits) if b == 0]
@@ -54,3 +54,5 @@ if __name__ == "__main__":
     print(f"Group 0 (sum={sum(group0)}): {group0}")
     print(f"Group 1 (sum={sum(group1)}): {group1}")
     print(f"Difference: {best_diff}")
+    # The total (37) is odd, so a difference of 1 is the best possible.
+    assert best_diff == 1, f"expected the optimal partition (diff 1), got {best_diff}"
