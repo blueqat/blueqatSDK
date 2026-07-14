@@ -187,6 +187,82 @@ class Circuit:
         vec, cnt = backend.run(self.ops, self.n_qubits, shots=1, returns='statevector_and_shots', **kwargs)
         return vec, next(iter(cnt))
 
+    def _expanded_applications(self):
+        """Yield (lowername, qubit-tuple) for each atomic gate application,
+        expanding slices/multi-targets the same way the backends do."""
+        from .gate import (Barrier, Gate, Measurement, OneQubitGate, Reset,
+                           TwoQubitGate)
+        n_qubits = self.n_qubits
+        for op in self.ops:
+            if isinstance(op, Barrier):
+                yield op.lowername, tuple(op.target_iter(n_qubits))
+            elif isinstance(op, (OneQubitGate, Measurement, Reset)):
+                for t in op.target_iter(n_qubits):
+                    yield op.lowername, (t, )
+            elif isinstance(op, TwoQubitGate):
+                for c, t in op.control_target_iter(n_qubits):
+                    yield op.lowername, (c, t)
+            elif isinstance(op, Gate):
+                yield op.lowername, tuple(op.targets)
+            else:
+                yield op.lowername, tuple(op.target_iter(n_qubits))
+
+    def depth(self) -> int:
+        """Circuit depth: length of the longest gate sequence on any qubit path,
+        counting each expanded gate application (as in Qiskit). Barriers don't
+        add depth."""
+        depths = [0] * self.n_qubits
+        for name, qubits in self._expanded_applications():
+            if name == 'barrier' or not qubits:
+                continue
+            d = max(depths[q] for q in qubits) + 1
+            for q in qubits:
+                depths[q] = d
+        return max(depths, default=0)
+
+    def count_ops(self) -> typing.Counter[str]:
+        """Count expanded gate applications by name (as in Qiskit's count_ops)."""
+        import collections
+        return collections.Counter(name for name, _ in self._expanded_applications())
+
+    def probs(self, qubits: Optional[typing.Sequence[int]] = None,
+              backend: 'BackendUnion' = None, **kwargs) -> torch.Tensor:
+        """Measurement probabilities of the circuit's final state, optionally
+        marginalized onto `qubits` (as in PennyLane's `qml.probs`).
+
+        Returns a tensor of length 2**len(qubits) where index bit j is the
+        outcome of `qubits[j]` (the first listed qubit is the least-significant
+        bit, matching the SDK-wide convention). Differentiable."""
+        state = self.statevector(backend, **kwargs)
+        p = torch.abs(state) ** 2
+        if qubits is None:
+            return p
+        keep = list(qubits)
+        if len(set(keep)) != len(keep):
+            raise ValueError('qubits must not contain duplicates.')
+        n = self.n_qubits
+        if any(not 0 <= q < n for q in keep):
+            raise ValueError(f'qubits must be in range(0, {n}).')
+        # After reshape, axis k corresponds to qubit n-1-k (the statevector
+        # index has qubit 0 as its least-significant bit).
+        t = p.reshape((2, ) * n)
+        keep_set = set(keep)
+        sum_axes = [n - 1 - q for q in range(n) if q not in keep_set]
+        if sum_axes:
+            t = t.sum(dim=sum_axes)
+        remaining = [q for q in reversed(range(n)) if q in keep_set]
+        # reshape(-1) makes the first axis most significant, so order axes as
+        # [last listed qubit, ..., first listed qubit].
+        t = t.permute([remaining.index(q) for q in reversed(keep)])
+        return t.reshape(-1)
+
+    def expect(self, hamiltonian: Any, backend: 'BackendUnion' = None, **kwargs) -> torch.Tensor:
+        """Expectation value <psi|H|psi> of a Pauli-expression Hamiltonian on
+        the circuit's final state. Differentiable."""
+        if hasattr(hamiltonian, 'to_expr'):
+            hamiltonian = hamiltonian.to_expr().simplify()
+        return self.run(backend, hamiltonian=hamiltonian, **kwargs)
+
     def ancilla(self, n: int = 1, pos: Optional[int] = None, stop: Optional[int] = None,
                 reset: bool = True) -> '_AncillaContext':
         """Context manager allocating temporary ancilla qubit(s) for use inside the `with` block.

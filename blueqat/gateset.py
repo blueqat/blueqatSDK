@@ -60,13 +60,16 @@ GATE_SET: Dict[str, Type[gate.Operation]] = {
     "cz": gate.CZGate,
     "toffoli": gate.ToffoliGate,
     # Other multi qubit gates (alphabetical)
+    "iswap": gate.ISwapGate,
+    "iswapdg": gate.ISwapDagGate,
     "rxx": gate.RXXGate,
     "ryy": gate.RYYGate,
     "rzz": gate.RZZGate,
     "swap": gate.SwapGate,
     "zz": gate.ZZGate,
     "zzdg": gate.ZZDagGate,
-    # Measure and reset (alphabetical)
+    # Measure, reset and barrier (alphabetical)
+    "barrier": gate.Barrier,
     "m": gate.Measurement,
     "measure": gate.Measurement,
     "reset": gate.Reset,

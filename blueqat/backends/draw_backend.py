@@ -217,7 +217,7 @@ class DrawCircuit(Backend):
         time_adjust = time%30
         for idx in gate.target_iter(ctx[1]):
             ypos_adjust = idx * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5
-            qlist[idx].append({'num': flg, 'gate': gate.lowername.upper(), 'angle': round(gate.theta, 2), 'xpos': time_adjust, 'ypos': ypos_adjust, 'type': 'gate'})
+            qlist[idx].append({'num': flg, 'gate': gate.lowername.upper(), 'angle': round(float(gate.theta), 2), 'xpos': time_adjust, 'ypos': ypos_adjust, 'type': 'gate'})
             flg += 1
         ctx[2].append(flg)
         ctx[3].append(time+1)
@@ -287,7 +287,7 @@ class DrawCircuit(Backend):
 
         time_adjust = time%30
         for control, target in gate.control_target_iter(ctx[1]):
-            qlist[target].append({'num': flg, 'gate': 'RZ', 'angle': round(gate.theta, 2), 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
+            qlist[target].append({'num': flg, 'gate': 'RZ', 'angle': round(float(gate.theta), 2), 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
             flg += 1
             qlist[control].append({'num': flg, 'gate': 'CRZ', 'angle': '', 'xpos': time_adjust, 'ypos': control * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
             flg += 1

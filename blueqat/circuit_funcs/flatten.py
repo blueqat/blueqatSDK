@@ -68,6 +68,10 @@ def flatten(c: Circuit) -> Circuit:
                         options
                     )
                 )
+        elif isinstance(op, g.Barrier):
+            # スライス指定を明示的な量子ビット列に展開して1つのbarrierとして保持
+            ops.append(op.create(tuple(op.target_iter(n_qubits)), op.params, None))
+
         elif isinstance(op, g.Gate):
             # 3量子ビット以上のゲート (ccx/ccz/cswap 等)。これらの targets は
             # スライス不可の明示的なタプルなので、そのまま新しい回路へ移せばよい。
