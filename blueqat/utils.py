@@ -264,24 +264,39 @@ class Term(_TermTuple):
     def is_commutable_with(self, other: Any) -> bool: return is_commutable(self, other)
 
     def get_time_evolution(self) -> Any:
+        """Returns a function `f(circuit, t)` appending exp(-i t P) to `circuit`,
+        where P = coeff * (this term's Pauli product). Requires a real coefficient
+        (a complex one would make the "evolution" non-unitary)."""
         term = self.simplify()
         coeff, ops = term.coeff, term.ops
+        if isinstance(coeff, complex):
+            if coeff.imag != 0:
+                raise ValueError("Cannot make time evolution of complex coefficient.")
+            coeff = coeff.real
+        elif isinstance(coeff, torch.Tensor) and torch.is_complex(coeff):
+            if coeff.imag != 0:
+                raise ValueError("Cannot make time evolution of complex coefficient.")
+            coeff = coeff.real
 
         def append_to_circuit(circuit: Any, t: float) -> None:
             if not ops: return
+            # Basis change into Z: H X H = Z, and RX(+pi/2) Y RX(-pi/2) = Z
+            # (RX(-pi/2) would give -Z, silently flipping the sign for Y terms).
             for op in ops:
                 if op.op == "X": circuit.h[op.n]
-                elif op.op == "Y": circuit.rx(-half_pi)[op.n]
+                elif op.op == "Y": circuit.rx(half_pi)[op.n]
             for i in range(1, len(ops)):
                 circuit.cx[ops[i - 1].n, ops[i].n]
-            
-            circuit.rz(-2 * coeff * t)[ops[-1].n]
-            
+
+            # exp(-i theta P) with P a Pauli product == RZ(2 theta) on the parity
+            # qubit (rz(phi) = diag(e^{-i phi/2}, e^{i phi/2})).
+            circuit.rz(2 * coeff * t)[ops[-1].n]
+
             for i in range(len(ops) - 1, 0, -1):
                 circuit.cx[ops[i - 1].n, ops[i].n]
             for op in ops:
                 if op.op == "X": circuit.h[op.n]
-                elif op.op == "Y": circuit.rx(half_pi)[op.n]
+                elif op.op == "Y": circuit.rx(-half_pi)[op.n]
 
         return append_to_circuit
 
@@ -603,11 +618,14 @@ class AnsatzBase:
             c = Circuit(n_qubits)
             c.ops = list(circuit.ops)
 
+            # Rotate each measured operator into the Z basis: H X H = Z and
+            # RX(+pi/2) Y RX(-pi/2) = Z. Using RX(-pi/2) here would measure -Y,
+            # flipping the sign of every term containing an odd number of Y's.
             for op in meas.ops:
                 if op.op == "X":
                     c.h[op.n]
                 elif op.op == "Y":
-                    c.rx(torch.tensor(-torch.pi / 2, dtype=torch.float64))[op.n]
+                    c.rx(torch.tensor(torch.pi / 2, dtype=torch.float64))[op.n]
 
             # 4. サンプラーが返す (測定qubitごとのbit tuple -> 確率) を実際に消費し、
             #    各qubitの1ビットのパリティで符号を決めて集計する

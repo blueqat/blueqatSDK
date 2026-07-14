@@ -40,7 +40,9 @@ _GATES = {
     # 1-arg 2-qubit
     'cp': ('cphase', 1), 'cu1': ('cphase', 1),
     'crx': ('crx', 1), 'cry': ('cry', 1), 'crz': ('crz', 1),
-    'rxx': ('rxx', 1), 'ryy': ('ryy', 1), 'rzz': ('rzz', 1), 'zz': ('zz', 1),
+    'rxx': ('rxx', 1), 'ryy': ('ryy', 1), 'rzz': ('rzz', 1),
+    # blueqat's zz gate is the fixed diag(1, i, i, 1) -- it takes no angle
+    'zz': ('zz', 0),
     # 4-arg 2-qubit
     'cu': ('cu', 4),
     # no-arg 3-qubit
