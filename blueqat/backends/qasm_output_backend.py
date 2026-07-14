@@ -144,3 +144,8 @@ class QasmOutputBackend(Backend):
         return ctx
 
     gate_reset = _one_qubit_gate_noargs
+
+    def gate_barrier(self, gate, ctx):
+        qubits = ",".join(f"q[{idx}]" for idx in gate.target_iter(ctx[1]))
+        ctx[0].append(f"barrier {qubits};")
+        return ctx

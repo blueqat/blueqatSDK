@@ -120,6 +120,28 @@ from blueqat.utils import Z
 hamiltonian = 1*Z[0]+1*Z[1]
 Circuit(4).x[:].run(hamiltonian=hamiltonian)
 # => -2.0
+
+# Or the equivalent convenience method (differentiable):
+Circuit(4).x[:].expect(hamiltonian)
+```
+
+### Probabilities, depth and gate counts
+```python
+Circuit(2).h[0].cx[0, 1].probs()        # measurement probabilities (differentiable)
+Circuit(2).h[0].cx[0, 1].probs([1])     # marginal on selected qubits
+Circuit(2).h[0].cx[0, 1].depth()        # => 2
+Circuit(2).h[0].cx[0, 1].count_ops()    # => Counter({'h': 1, 'cx': 1})
+```
+
+### Cloud access (API key groundwork)
+```python
+import blueqat.cloud as cloud
+cloud.save_api_key("YOUR_API_KEY")   # stored in ~/.blueqat/config.json (0600)
+# or: export BLUEQAT_API_KEY=...    # environment variable takes priority
+
+import blueqat.cloud                 # registers the 'cloud' backend
+# Circuit(2).h[0].cx[0, 1].m[:].run(backend='cloud', shots=100)
+# (submits the JSON-serialized circuit once the public endpoint is live)
 ```
 
 ### Blueqat to/from QASM

@@ -782,8 +782,13 @@ def get_measurement_sampler(n_sample: int, device: Optional[torch.device] = None
         meas_tuple = tuple(meas)
         statevector = circuit.run()
         probs = torch.abs(statevector) ** 2
-        
-        samples = torch.multinomial(probs, n_sample, replacement=True)
+
+        # torch.multinomial is capped at 2^24 categories; inverse-CDF sampling
+        # (cumsum + searchsorted) has no such limit. Same approach as TorchBackend.
+        cdf = torch.cumsum(probs, dim=0)
+        cdf[-1] = 1.0
+        u = torch.rand(n_sample, device=probs.device, dtype=probs.dtype)
+        samples = torch.searchsorted(cdf, u)
         unique_elements, counts = torch.unique(samples, return_counts=True)
         
         result_counts = Counter()
