@@ -19,7 +19,7 @@ This is what allows going beyond the fixed analytic gate tables: any target
 SU(2) can be compiled into a few constant-amplitude pulses."""
 
 import math
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import torch
 
