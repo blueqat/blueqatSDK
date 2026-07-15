@@ -48,9 +48,17 @@ class DrawCircuit(Backend):
         color_gate['CX'] = color_gate['CY'] = color_gate['CZ'] = '#0BB0E2'
         color_gate['RX'] = color_gate['RY'] = color_gate['RZ'] = '#FCD000' # 回転系: 黄色
         color_gate['CRZ'] = color_gate['PHASE'] = '#FCD000'
+        color_gate['U'] = '#FCD000'
         color_gate['H'] = color_gate['T'] = color_gate['S'] = '#E6000A'  # クリフォード系: 赤
+        color_gate['TDG'] = color_gate['SDG'] = '#E6000A'
+        color_gate['SX'] = color_gate['SXDG'] = '#E6000A'
         color_gate['SWAP'] = '#A020F0'                                   # スワップ: 紫
-        color_gate['CCX'] = '#FF8C00'                                    # 3量子ビット系: オレンジ
+        color_gate['ISWAP'] = color_gate['ISWAPDG'] = '#A020F0'
+        # 相互作用系 (2量子ビット回転・交換): 紫
+        color_gate['RXX'] = color_gate['RYY'] = color_gate['RZZ'] = '#A020F0'
+        color_gate['ZZ'] = color_gate['ZZDG'] = color_gate['EXCH'] = '#A020F0'
+        color_gate['CCX'] = color_gate['CCZ'] = '#FF8C00'                # 3量子ビット系: オレンジ
+        color_gate['CSWAP'] = '#FF8C00'
         color_gate['M'] = 'white'
         
         qlist = ctx[0]
@@ -194,6 +202,8 @@ class DrawCircuit(Backend):
     gate_h = _one_qubit_gate_noargs
     gate_t = gate_tdg = _one_qubit_gate_noargs
     gate_s = gate_sdg = _one_qubit_gate_noargs
+    gate_sx = gate_sxdg = _one_qubit_gate_noargs
+    gate_mat1 = _one_qubit_gate_noargs
     
     def _one_qubit_gate_args_theta(self, gate, ctx):
         flg = ctx[2][-1]
@@ -226,7 +236,46 @@ class DrawCircuit(Backend):
     gate_rx = gate_ry = gate_rz = _one_qubit_gate_args_theta
     gate_phase = _one_qubit_gate_args_theta
 
+    def gate_u(self, gate, ctx):
+        """U(θ, φ, λ) ゲート: 3角度をまとめてラベル下に表示する。"""
+        angle_text = ",".join(str(round(float(v), 2))
+                              for v in (gate.theta, gate.phi, gate.lam))
+        return self._append_one_qubit_boxes(gate, ctx, 'U', angle_text)
+
+    def _append_one_qubit_boxes(self, gate, ctx, label, angle_text):
+        flg = ctx[2][-1]
+        time = ctx[3][-1]
+        qlist = ctx[0]
+
+        time_adjust = time%30
+        if time_adjust == 0:
+            for i in range(ctx[1]):
+                ypos_adjust = i * 1.5 + (math.floor(time/30)-1)*(ctx[1]+1)*1.5
+                qlist[i].append({'num': flg, 'gate': '', 'angle': '', 'xpos': 30, 'ypos': ypos_adjust, 'type': 'dummy'})
+                flg += 1
+            time += 1
+            for i in range(ctx[1]):
+                ypos_adjust = i * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5
+                qlist[i].append({'num': flg, 'gate': '', 'angle': '', 'xpos': 0, 'ypos': ypos_adjust, 'type': 'dummy'})
+                flg += 1
+                ctx[5].append((flg-1, flg-1-ctx[1]))
+
+        time_adjust = time%30
+        for idx in gate.target_iter(ctx[1]):
+            ypos_adjust = idx * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5
+            qlist[idx].append({'num': flg, 'gate': label, 'angle': angle_text, 'xpos': time_adjust, 'ypos': ypos_adjust, 'type': 'gate'})
+            flg += 1
+        ctx[2].append(flg)
+        ctx[3].append(time+1)
+        return ctx
+
     def gate_i(self, gate, ctx):
+        time = ctx[3][-1]
+        ctx[3].append(time+1)
+        return ctx
+
+    def gate_barrier(self, gate, ctx):
+        # バリアは回路図では時刻の区切りのみ (ノードは描かない)
         time = ctx[3][-1]
         ctx[3].append(time+1)
         return ctx
@@ -237,7 +286,10 @@ class DrawCircuit(Backend):
         qlist = ctx[0]
         
         name = gate.lowername
-        tg = 'X' if name == 'cx' else ('Y' if name == 'cy' else ('Z' if name == 'cz' else 'SWAP'))
+        # 制御ゲートはターゲット側にゲート本体のラベル、制御側に黒丸を描く。
+        # zz/iswap のような対称ゲートも「片側にラベル + 反対側に黒丸 + 結線」で表す。
+        _target_labels = {'cx': 'X', 'cy': 'Y', 'cz': 'Z', 'ch': 'H', 'swap': 'SWAP'}
+        tg = _target_labels.get(name, gate.uppername)
 
         time_adjust = time%30
         if time_adjust == 0:
@@ -265,6 +317,9 @@ class DrawCircuit(Backend):
         return ctx
     
     gate_cx = gate_cy = gate_cz = gate_swap = _two_qubit_gate_noargs
+    gate_ch = _two_qubit_gate_noargs
+    gate_zz = gate_zzdg = _two_qubit_gate_noargs
+    gate_iswap = gate_iswapdg = _two_qubit_gate_noargs
 
     def _two_qubit_gate_args_theta(self, gate, ctx):
         """CRZゲートなどの描画"""
@@ -285,9 +340,17 @@ class DrawCircuit(Backend):
                 flg += 1
                 ctx[5].append((flg-1, flg-1-ctx[1]))
 
+        # crx/cry/crz/cphase はターゲット側に RX/RY/RZ/PHASE を表示し、
+        # rxx/ryy/rzz/exch のような対称回転は片側にゲート名を表示する。
+        name = gate.lowername
+        if name in ('crx', 'cry', 'crz', 'cphase'):
+            tglabel = name[1:].upper()
+        else:
+            tglabel = gate.uppername
+
         time_adjust = time%30
         for control, target in gate.control_target_iter(ctx[1]):
-            qlist[target].append({'num': flg, 'gate': 'RZ', 'angle': round(float(gate.theta), 2), 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
+            qlist[target].append({'num': flg, 'gate': tglabel, 'angle': round(float(gate.theta), 2), 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
             flg += 1
             qlist[control].append({'num': flg, 'gate': 'CRZ', 'angle': '', 'xpos': time_adjust, 'ypos': control * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
             flg += 1
@@ -296,7 +359,42 @@ class DrawCircuit(Backend):
         ctx[3].append(time+1)
         return ctx
 
-    gate_crz = _two_qubit_gate_args_theta
+    gate_crz = gate_crx = gate_cry = _two_qubit_gate_args_theta
+    gate_cphase = _two_qubit_gate_args_theta
+    gate_rxx = gate_ryy = gate_rzz = _two_qubit_gate_args_theta
+    gate_exch = _two_qubit_gate_args_theta
+
+    def gate_cu(self, gate, ctx):
+        """CU(θ, φ, λ, γ) ゲート: ターゲット側に U と角度一覧を表示する。"""
+        flg = ctx[2][-1]
+        time = ctx[3][-1]
+        qlist = ctx[0]
+
+        time_adjust = time%30
+        if time_adjust == 0:
+            for i in range(ctx[1]):
+                ypos_adjust = i * 1.5 + (math.floor(time/30)-1)*(ctx[1]+1)*1.5
+                qlist[i].append({'num': flg, 'gate': '', 'angle': '', 'xpos': 30, 'ypos': ypos_adjust, 'type': 'dummy'})
+                flg += 1
+            time += 1
+            for i in range(ctx[1]):
+                ypos_adjust = i * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5
+                qlist[i].append({'num': flg, 'gate': '', 'angle': '', 'xpos': 0, 'ypos': ypos_adjust, 'type': 'dummy'})
+                flg += 1
+                ctx[5].append((flg-1, flg-1-ctx[1]))
+
+        angle_text = ",".join(str(round(float(v), 2))
+                              for v in (gate.theta, gate.phi, gate.lam, gate.gamma))
+        time_adjust = time%30
+        for control, target in gate.control_target_iter(ctx[1]):
+            qlist[target].append({'num': flg, 'gate': 'U', 'angle': angle_text, 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
+            flg += 1
+            qlist[control].append({'num': flg, 'gate': 'CRZ', 'angle': '', 'xpos': time_adjust, 'ypos': control * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
+            flg += 1
+            ctx[4].append((flg-2, flg-1))
+        ctx[2].append(flg)
+        ctx[3].append(time+1)
+        return ctx
 
     def _three_qubit_gate_noargs(self, gate, ctx):
         """CCX(トフォリ)ゲートの描画"""
@@ -319,8 +417,8 @@ class DrawCircuit(Backend):
 
         time_adjust = time%30
         c1, c2, target = gate.targets[0], gate.targets[1], gate.targets[2]
-        
-        qlist[target].append({'num': flg, 'gate': 'CCX', 'angle': '', 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
+
+        qlist[target].append({'num': flg, 'gate': gate.uppername, 'angle': '', 'xpos': time_adjust, 'ypos': target * 1.5 + math.floor(time/30)*(ctx[1]+1)*1.5, 'type': 'gate'})
         t_num = flg
         flg += 1
         
@@ -341,6 +439,7 @@ class DrawCircuit(Backend):
 
     gate_ccx = _three_qubit_gate_noargs
     gate_cswap = _three_qubit_gate_noargs
+    gate_ccz = _three_qubit_gate_noargs
 
     def gate_measure(self, gate, ctx):
         return ctx
@@ -349,9 +448,17 @@ class DrawCircuit(Backend):
 
     def run(self, gates, n_qubits, *args, **kwargs):
         """Blueqatのエントリーポイント"""
+        import warnings
         gates, ctx = self._preprocess_run(gates, n_qubits, args, kwargs)
         for gate in gates:
-            if hasattr(self, f"gate_{gate.lowername}"):
-                ctx = getattr(self, f"gate_{gate.lowername}")(gate, ctx)
+            handler = getattr(self, f"gate_{gate.lowername}", None)
+            if handler is not None:
+                ctx = handler(gate, ctx)
+            else:
+                # 黙って省略すると「その操作が無い回路図」ができてしまうため、
+                # 描画されなかったことを必ず警告する。
+                warnings.warn(
+                    f"Gate '{gate.lowername}' is not supported by the draw "
+                    "backend and was omitted from the diagram.")
         self._postprocess_run(ctx)
         return ctx
