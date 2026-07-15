@@ -11,8 +11,13 @@ import math
 import random
 
 import numpy as np
+import torch
 
 from blueqat import Circuit
+
+# Deterministic shot sampling so the 3-sigma-style statistical check below
+# can't fail by chance (e.g. in CI).
+torch.manual_seed(1234)
 
 
 def make_psi(theta: float, phi: float) -> np.ndarray:
