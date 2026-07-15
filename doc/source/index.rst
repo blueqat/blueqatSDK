@@ -1,6 +1,11 @@
 blueqat documentation
 =====================
 
+.. note::
+
+   日本語版ドキュメントは :doc:`こちら <ja/index>` (Japanese documentation
+   is also available).
+
 **blueqat** is an open-source Python SDK for quantum computing, built natively
 on PyTorch. Circuits run on a differentiable statevector / tensor-network
 simulator, so gradients of quantum programs (for VQE, QAOA, pulse
@@ -45,6 +50,12 @@ Highlights
    :caption: API reference
 
    api/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: 日本語 (Japanese)
+
+   ja/index
 
 Indices and tables
 ------------------
