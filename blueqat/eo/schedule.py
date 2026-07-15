@@ -39,6 +39,7 @@ Durations are theta / amplitude (constant-amplitude pulses: the pulse area
 theta = J * t is what fixes the gate).
 """
 
+import math
 from typing import Any, Dict, List, Sequence, Union
 
 from ..circuit import Circuit
@@ -72,16 +73,25 @@ def to_schedule(source: Union[Circuit, Sequence[Pulse]],
 
     Each pulse starts as soon as both of its spins are free; pulses touching
     disjoint pairs run simultaneously. Relative order of pulses sharing a
-    spin is preserved, so the scheduled unitary equals the sequential one."""
+    spin is preserved, so the scheduled unitary equals the sequential one.
+
+    The exchange unitary is exactly 2*pi-periodic in the pulse area, so theta
+    is canonicalized into [0, 2*pi) -- a negative area (e.g. from a daggered
+    circuit) becomes the equivalent positive-duration pulse, and pulses whose
+    area is a multiple of 2*pi (no-ops) are dropped."""
     if amplitude <= 0:
         raise ValueError('amplitude must be positive.')
     pulses, inferred = _pulses_of(source)
     n_spins = max(n_spins, inferred)
 
+    two_pi = 2.0 * math.pi
     free_at = [0.0] * n_spins
     entries = []
     total = 0.0
     for (i, j), theta in pulses:
+        theta = theta % two_pi
+        if theta < 1e-12 or two_pi - theta < 1e-12:
+            continue
         duration = theta / amplitude
         start = max(free_at[i], free_at[j])
         end = start + duration

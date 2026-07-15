@@ -106,3 +106,17 @@ def test_from_qasm_rejects_unsafe_expressions():
 def test_from_qasm_rejects_unknown_gate():
     with pytest.raises(ValueError):
         from_qasm('bogusgate q[0];')
+
+def test_barrier_qasm_roundtrip():
+    # to_qasm emits real barrier statements; from_qasm must parse them back
+    # (it used to skip them, so barriers vanished on a round trip).
+    c = Circuit(3).h[0].barrier[:].cx[0, 1]
+    c2 = from_qasm(c.to_qasm())
+    assert [op.lowername for op in c2.ops] == ['h', 'barrier', 'cx']
+    assert tuple(c2.ops[1].target_iter(3)) == (0, 1, 2)
+    assert np.allclose(c.run(), c2.run())
+
+def test_from_qasm_whole_register_barrier_is_skipped():
+    # "barrier q;" has no explicit indices; the parser drops it (documented).
+    c = from_qasm('h q[0]; barrier q; x q[0];')
+    assert [op.lowername for op in c.ops] == ['h', 'x']

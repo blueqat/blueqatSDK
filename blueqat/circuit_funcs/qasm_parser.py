@@ -97,7 +97,16 @@ def from_qasm(qasm: str) -> Circuit:
         stmt = raw_stmt.strip()
         if not stmt:
             continue
-        if stmt.startswith(('OPENQASM', 'include', 'qreg', 'creg', 'barrier', 'gate ', 'opaque ')):
+        if stmt.startswith(('OPENQASM', 'include', 'qreg', 'creg', 'gate ', 'opaque ')):
+            continue
+
+        barrier_match = re.match(r'barrier\s+(.+)$', stmt)
+        if barrier_match:
+            targets = _parse_targets(barrier_match.group(1))
+            if targets:
+                c.barrier[tuple(targets) if len(targets) > 1 else targets[0]]
+            # "barrier q;" (whole register, no explicit indices) is dropped:
+            # the register size isn't tracked here.
             continue
 
         measure_match = re.match(r'measure\s+q\[(\d+)\]\s*->\s*c\[(\d+)\]$', stmt)
