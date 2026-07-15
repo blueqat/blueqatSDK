@@ -19,6 +19,14 @@
 Logical qubit i is encoded in physical spins 3i, 3i+1, 3i+2, and the output
 is an ordinary Circuit containing only `exch` pulses, runnable on any
 simulation backend. All logical gates are exact up to global phase.
+
+Topology note: the emitted pulses assume any pair inside the two triples
+involved in a gate can be pulsed (in particular, the Fong-Wandzura CNOT's
+bridge pulse connects spin 3c+2 with spin 3t+2, and the encoded SWAP pulses
+pair the triples spin-by-spin). This is always fine for simulation; mapping
+onto strict nearest-neighbor-only hardware additionally requires dot
+orientation assignment and spin-level SWAP routing, which is future work
+(cf. exchange-pulse-optimizer).
 """
 
 from typing import Any, List
