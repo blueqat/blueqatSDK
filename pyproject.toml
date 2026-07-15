@@ -37,4 +37,4 @@ Homepage = "https://github.com/Blueqat/Blueqat"
 version = { attr = "blueqat._version.__version__" }
 
 [tool.setuptools]
-packages = ["blueqat", "blueqat.backends", "blueqat.circuit_funcs", "blueqat.macros"]
+packages = ["blueqat", "blueqat.backends", "blueqat.circuit_funcs", "blueqat.eo", "blueqat.macros"]
