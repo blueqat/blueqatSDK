@@ -268,7 +268,7 @@ Circuit().h[0].cx[0, 1].run(backend="draw_tn")        # tensor-network graph
 ```
 
 ### Document
-https://blueqat.readthedocs.io/en/latest/
+https://blueqat.github.io/blueqatSDK/ (日本語版: https://blueqat.github.io/blueqatSDK/ja/index.html)
 
 
 ### Disclaimer
