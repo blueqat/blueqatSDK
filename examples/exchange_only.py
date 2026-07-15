@@ -57,4 +57,15 @@ if __name__ == "__main__":
                      dtype=torch.complex128)
     L = encoding.logical_action(u, '+')
     print(f"Synthesis fidelity: {encoding.logical_fidelity(L, target):.12f}")
+
+    # 4. Hardware-facing pulse schedule: ASAP packing runs pulses on disjoint
+    #    spin pairs simultaneously, and the dict is JSON-ready for a control
+    #    stack or cloud submission.
+    from blueqat.eo import schedule_stats, to_schedule
+    sched = to_schedule(physical)
+    stats = schedule_stats(sched)
+    print(f"\nPulse schedule: {stats['n_pulses']} pulses, "
+          f"serial {stats['serial_duration']:.2f} -> "
+          f"scheduled {stats['scheduled_duration']:.2f} "
+          f"(speedup x{stats['parallel_speedup']:.2f})")
     print("OK: exchange pulses alone reproduce the logical circuit.")
