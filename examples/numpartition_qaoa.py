@@ -16,8 +16,6 @@ import torch
 
 from blueqat.utils import Vqe, QaoaAnsatz, Z
 
-torch.manual_seed(42)
-
 
 def numpartition_hamiltonian(nums: List[int]):
     """Cost Hamiltonian for partitioning `nums` into two equal-sum groups."""
@@ -35,18 +33,25 @@ if __name__ == "__main__":
     print(f"Numbers: {nums} (total: {sum(nums)})")
 
     hamiltonian = numpartition_hamiltonian(nums)
-    vqe = Vqe(QaoaAnsatz(hamiltonian, step=4))
-    result = vqe.run(max_iter=500)
 
-    # Look at the top candidates and keep the best-balanced one.
-    candidates = result.most_common(10)
+    # QAOA is a stochastic heuristic, and even with a fixed seed the
+    # optimization trajectory depends on platform floating-point details, so
+    # a single run is not reproducible everywhere. Restart from a few seeds
+    # (standard QAOA practice) and keep the best partition seen; each restart
+    # inspects the top-10 most likely bitstrings.
     best_bits, best_diff = None, None
-    for bits, _ in candidates:
-        group0 = [x for x, b in zip(nums, bits) if b == 0]
-        group1 = [x for x, b in zip(nums, bits) if b == 1]
-        diff = abs(sum(group0) - sum(group1))
-        if best_diff is None or diff < best_diff:
-            best_bits, best_diff = bits, diff
+    for seed in (42, 0, 1, 2, 3):
+        torch.manual_seed(seed)
+        vqe = Vqe(QaoaAnsatz(hamiltonian, step=4))
+        result = vqe.run(max_iter=500)
+        for bits, _ in result.most_common(10):
+            group0 = [x for x, b in zip(nums, bits) if b == 0]
+            group1 = [x for x, b in zip(nums, bits) if b == 1]
+            diff = abs(sum(group0) - sum(group1))
+            if best_diff is None or diff < best_diff:
+                best_bits, best_diff = bits, diff
+        if best_diff == 1:
+            break
 
     group0 = [x for x, b in zip(nums, best_bits) if b == 0]
     group1 = [x for x, b in zip(nums, best_bits) if b == 1]
