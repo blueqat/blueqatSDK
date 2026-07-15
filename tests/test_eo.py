@@ -353,6 +353,38 @@ def test_schedule_never_overlaps_shared_spins():
             busy.setdefault(spin, []).append((p["start"], p["start"] + p["duration"]))
 
 
+def test_schedule_canonicalizes_negative_and_periodic_theta():
+    from blueqat.eo import from_schedule, to_schedule
+    # A daggered exchange circuit has negative pulse areas; the exchange
+    # unitary is exactly 2*pi-periodic, so the schedule must contain the
+    # equivalent positive-duration pulses (never negative durations), and
+    # exact no-ops (multiples of 2*pi) must be dropped.
+    seq = [((0, 1), -0.7), ((0, 1), 7.0), ((1, 2), 0.0), ((1, 2), 2 * math.pi)]
+    sched = to_schedule(seq)
+    assert all(p["duration"] > 0 for p in sched["pulses"])
+    assert len(sched["pulses"]) == 2  # the two no-ops are dropped
+    assert sched["pulses"][0]["theta"] == pytest.approx(2 * math.pi - 0.7)
+    assert sched["pulses"][1]["theta"] == pytest.approx(7.0 - 2 * math.pi)
+
+    # The canonicalized schedule reproduces the original unitary.
+    c1 = Circuit(3).exch(-0.7)[0, 1].exch(7.0)[0, 1]
+    v1 = c1.run()
+    v2 = from_schedule(to_schedule(c1)).run()
+    assert torch.allclose(v1, v2, atol=1e-10)
+
+
+def test_schedule_of_daggered_circuit():
+    from blueqat.eo import from_schedule, to_schedule
+    phys = Circuit(1).h[0].run(backend='eo')
+    inv = phys.dagger()
+    sched = to_schedule(inv)
+    assert all(p["duration"] > 0 for p in sched["pulses"])
+    init = encoding.encode_state([(1, 0)])
+    v1 = inv.run(initial=init)
+    v2 = from_schedule(sched).run(initial=init)
+    assert torch.allclose(v1, v2, atol=1e-10)
+
+
 def test_schedule_rejects_non_exchange_circuit():
     from blueqat.eo import to_schedule
     with pytest.raises(ValueError, match='exchange'):
