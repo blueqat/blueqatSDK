@@ -39,7 +39,7 @@ _THETA_C = math.acos(1.0 / 3.0)
 
 def rz_sequence(phase: float, offset: int = 0) -> List[Pulse]:
     """Logical RZ(phase): a single pulse on the (0,1) pair (the singlet in
-    |0_L> picks up e^{i theta}, giving RZ(-theta) up to global phase)."""
+    ``|0_L>`` picks up e^{i theta}, giving RZ(-theta) up to global phase)."""
     theta = (-phase) % _TWO_PI
     if abs(theta) < 1e-12 or abs(theta - _TWO_PI) < 1e-12:
         return []

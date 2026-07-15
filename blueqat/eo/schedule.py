@@ -21,7 +21,8 @@ commute, so this never changes the unitary). The format is designed to be
 handed to pulse-level control stacks (e.g. spinQICK-style backends) or
 submitted through `blueqat.cloud`.
 
-Schema:
+Schema::
+
     {
       "format": "blueqat-eo-schedule",
       "version": "1",

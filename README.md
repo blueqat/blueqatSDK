@@ -1,6 +1,8 @@
 # blueqat
 A Quantum Computing SDK
 
+**Documentation**: https://blueqat.github.io/blueqatSDK/
+
 Blueqat's simulator is built on PyTorch, with two selectable execution modes:
 a dense **statevector** simulator and a memory-scalable **tensornet**
 (tensor-network contraction) simulator, which is the default. Both are
