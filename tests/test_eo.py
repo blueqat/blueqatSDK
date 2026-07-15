@@ -263,3 +263,107 @@ def test_synthesize_t_gate_shorter_than_composed_table():
     seq = synthesize_1q(t_target, n_pulses=4, seed=42)
     L = encoding.logical_action(_u(seq, 3), '+')
     assert encoding.logical_fidelity(L, t_target) >= 1.0 - 1e-8
+
+
+# --- 2q refinement, quantization, schedules (Phase 4/5) ---------------------------
+
+def test_synthesize_2q_recalibrates_perturbed_fw_angles():
+    # The calibration use case: perturb every FW-CNOT pulse area (as hardware
+    # drift would), then let the differentiable optimizer pull the sequence
+    # back to an exact, gauge-independent CNOT.
+    from blueqat.eo import synthesize_2q
+    fw = cx_sequence(3, 0)
+    pairs = [p for p, _ in fw]
+    g = torch.Generator().manual_seed(5)
+    perturbed = [t + 0.05 * float(torch.randn((), generator=g)) for _, t in fw]
+
+    u_pert = _u(list(zip(pairs, perturbed)), 6)
+    basis = encoding.two_qubit_codeword_basis('+', '+')
+    fid_pert = encoding.logical_fidelity(basis.conj().T @ u_pert @ basis, CX_TARGET)
+    assert fid_pert < 0.999  # the perturbation is actually harmful
+
+    refined = synthesize_2q(CX_TARGET, pairs=pairs, initial_thetas=perturbed,
+                            n_restarts=1, seed=None)
+    u_ref = _u(refined, 6)
+    for m1 in ['+', '-']:
+        for m2 in ['+', '-']:
+            L = encoding.two_qubit_logical_action(u_ref, m1, m2)
+            assert encoding.logical_fidelity(L, CX_TARGET) >= 1.0 - 1e-8
+
+
+def test_quantize_sequence_fine_grid_keeps_fidelity():
+    from blueqat.eo import quantize_sequence
+    xq = quantize_sequence(x_sequence(), 2 * math.pi / 4096)
+    L = encoding.logical_action(_u(xq, 3), '+')
+    assert encoding.logical_fidelity(L, X) > 1.0 - 1e-4
+
+
+def test_quantize_sequence_snaps_and_drops():
+    from blueqat.eo import quantize_sequence
+    step = math.pi / 2
+    seq = [((0, 1), math.pi / 2 + 0.01), ((1, 2), 1e-9), ((0, 1), math.pi)]
+    q = quantize_sequence(seq, step)
+    assert q == [((0, 1), math.pi / 2), ((0, 1), math.pi)]
+    with pytest.raises(ValueError):
+        quantize_sequence(seq, 0.0)
+
+
+def test_schedule_roundtrip_preserves_state():
+    from blueqat.eo import from_schedule, to_schedule
+    phys = Circuit(2).h[0].cx[0, 1].run(backend='eo')
+    sched = to_schedule(phys)
+    init = encoding.encode_state([(1, 0), (1, 0)])
+    v1 = phys.run(initial=init)
+    v2 = from_schedule(sched).run(initial=init)
+    assert torch.allclose(v1, v2, atol=1e-10)
+
+
+def test_schedule_is_json_serializable_and_versioned():
+    import json
+    from blueqat.eo import to_schedule
+    sched = to_schedule(Circuit(1).h[0].run(backend='eo'))
+    text = json.dumps(sched)
+    assert '"blueqat-eo-schedule"' in text
+    assert sched["version"] == "1"
+    assert sched["n_spins"] == 3
+
+
+def test_schedule_packs_disjoint_pulses_in_parallel():
+    from blueqat.eo import schedule_stats, to_schedule
+    # Pulses on (0,1) and (2,3) are disjoint -> run simultaneously.
+    seq = [((0, 1), math.pi), ((2, 3), math.pi), ((1, 2), math.pi)]
+    sched = to_schedule(seq)
+    starts = {tuple(p["pair"]): p["start"] for p in sched["pulses"]}
+    assert starts[(0, 1)] == starts[(2, 3)] == 0.0
+    assert starts[(1, 2)] == pytest.approx(math.pi)
+    stats = schedule_stats(sched)
+    assert stats["parallel_speedup"] > 1.0
+    assert stats["scheduled_duration"] == pytest.approx(2 * math.pi)
+
+
+def test_schedule_never_overlaps_shared_spins():
+    from blueqat.eo import to_schedule
+    phys = Circuit(2).h[0].cx[0, 1].run(backend='eo')
+    sched = to_schedule(phys)
+    busy = {}
+    for p in sched["pulses"]:
+        for spin in p["pair"]:
+            for (s, e) in busy.get(spin, []):
+                assert p["start"] >= e - 1e-12 or p["start"] + p["duration"] <= s + 1e-12
+            busy.setdefault(spin, []).append((p["start"], p["start"] + p["duration"]))
+
+
+def test_schedule_rejects_non_exchange_circuit():
+    from blueqat.eo import to_schedule
+    with pytest.raises(ValueError, match='exchange'):
+        to_schedule(Circuit(2).h[0])
+
+
+def test_exchange_circuit_serializes_for_cloud():
+    # The 'exch' pulses must survive the JSON wire format used by the cloud
+    # backend (schema round-trip through the ordinary serializer).
+    from blueqat.circuit_funcs.json_serializer import deserialize, serialize
+    phys = Circuit(1).h[0].run(backend='eo')
+    c2 = deserialize(serialize(phys))
+    init = encoding.encode_state([(1, 0)])
+    assert torch.allclose(phys.run(initial=init), c2.run(initial=init), atol=1e-12)

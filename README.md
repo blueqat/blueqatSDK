@@ -153,6 +153,14 @@ encoding.leakage(final, 0)                       # leakage out of the code space
 
 # Differentiable pulse synthesis: any SU(2) in 4 constant-amplitude pulses
 seq = synthesize_1q(target_2x2_unitary, n_pulses=4)
+
+# Re-calibrate a drifted 2-qubit sequence back to an exact gate
+from blueqat.eo import synthesize_2q, quantize_sequence, to_schedule
+refined = synthesize_2q(cx_4x4, pairs=pulse_pairs, initial_thetas=drifted)
+
+# Discrete pulse durations (hardware clock ticks) and time-resolved schedules
+seq_q = quantize_sequence(seq, step=2 * math.pi / 4096)
+schedule = to_schedule(physical)   # ASAP-parallel, JSON-ready pulse schedule
 ```
 
 ### Cloud access (API key groundwork)

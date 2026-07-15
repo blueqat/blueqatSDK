@@ -27,14 +27,15 @@ silicon spin-qubit hardware.
   logical 1-qubit gates as short pulse sequences.
 """
 
-from . import encoding, sequences, optimizer
+from . import encoding, sequences, optimizer, schedule
 from .encoding import (codeword_basis, encode_state, leakage, logical_action,
                        logical_fidelity)
 from .sequences import (cx_sequence, cz_sequence, h_sequence, rx_sequence,
                         ry_sequence, rz_sequence, s_sequence, sdg_sequence,
                         sequence_to_circuit, t_sequence, tdg_sequence,
                         x_sequence, y_sequence, z_sequence)
-from .optimizer import synthesize_1q
+from .optimizer import quantize_sequence, synthesize_1q, synthesize_2q
+from .schedule import from_schedule, schedule_stats, to_schedule
 from .transpiler import EOTranspiler
 
 __all__ = [
@@ -43,5 +44,7 @@ __all__ = [
     "cx_sequence", "cz_sequence", "h_sequence", "rx_sequence", "ry_sequence",
     "rz_sequence", "s_sequence", "sdg_sequence", "sequence_to_circuit",
     "t_sequence", "tdg_sequence", "x_sequence", "y_sequence", "z_sequence",
-    "synthesize_1q", "EOTranspiler",
+    "quantize_sequence", "synthesize_1q", "synthesize_2q",
+    "from_schedule", "schedule_stats", "to_schedule",
+    "EOTranspiler",
 ]
