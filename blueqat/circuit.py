@@ -279,7 +279,7 @@ class Circuit:
                 c.cx[3, a[0]]
 
         If `reset` is true (the default), a `reset` gate is appended for each
-        ancilla qubit on exiting the block, so they're back at |0> and safe to
+        ancilla qubit on exiting the block, so they're back at ``|0>`` and safe to
         reuse elsewhere in the circuit.
         """
         if pos is not None:

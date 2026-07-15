@@ -14,11 +14,11 @@
 """The 3-spin decoherence-free-subsystem (DFS) encoding of exchange-only qubits.
 
 One logical qubit lives in the total-spin S=1/2 sector of 3 physical spins
-(spin up = |0>, physical qubit 3i+k is spin k of logical qubit i, qubit 0 is
+(spin up = ``|0>``, physical qubit 3i+k is spin k of logical qubit i, qubit 0 is
 the least-significant statevector bit, as everywhere in this SDK):
 
-    |0_L> = |singlet(0,1)> |up(2)>
-    |1_L> = sqrt(2/3) |T+(0,1)> |down(2)> - sqrt(1/3) |T0(0,1)> |up(2)>
+    ``|0_L>`` = ``|singlet(0,1)>`` ``|up(2)>``
+    ``|1_L>`` = sqrt(2/3) ``|T+(0,1)>`` ``|down(2)>`` - sqrt(1/3) ``|T0(0,1)>`` ``|up(2)>``
 
 Each logical state comes in two "gauge" copies, the total-Sz m=+1/2 sector
 above and its m=-1/2 partner; exchange acts identically on both, and any
@@ -62,7 +62,7 @@ _QUAD = torch.stack([
 
 
 def codeword_basis(m: str = '+') -> torch.Tensor:
-    """(8, 2) matrix whose columns are |0_L>, |1_L> of the requested gauge
+    """(8, 2) matrix whose columns are ``|0_L>``, ``|1_L>`` of the requested gauge
     sector ('+' for total Sz = +1/2, '-' for -1/2)."""
     if m == '+':
         return torch.stack([_KET_0L_PLUS, _KET_1L_PLUS], dim=1)
@@ -127,7 +127,7 @@ def logical_action(unitary8: torch.Tensor, m: str = '+',
 
 
 def logical_fidelity(actual: torch.Tensor, target: torch.Tensor) -> float:
-    """Phase-insensitive gate fidelity |tr(A^dagger T)|^2 / d^2 of two
+    """Phase-insensitive gate fidelity ``|tr(A^dagger T)|^2 / d^2`` of two
     equally-sized unitaries."""
     d = actual.shape[0]
     tr = torch.trace(actual.conj().T @ target.to(actual.dtype))
@@ -136,7 +136,7 @@ def logical_fidelity(actual: torch.Tensor, target: torch.Tensor) -> float:
 
 def two_qubit_codeword_basis(m1: str, m2: str) -> torch.Tensor:
     """(64, 4) basis of a 2-logical-qubit (6-spin) sector: columns are
-    |00_L>, |01_L>, |10_L>, |11_L> with gauge m1 for logical qubit 0
+    ``|00_L>``, ``|01_L>``, ``|10_L>``, ``|11_L>`` with gauge m1 for logical qubit 0
     (spins 0-2) and m2 for logical qubit 1 (spins 3-5)."""
     b1 = codeword_basis(m1)
     b2 = codeword_basis(m2)

@@ -14,6 +14,7 @@
 """Groundwork for API-key based access to the Blueqat cloud service.
 
 Credential resolution order:
+
 1. An explicit `configure(api_key=...)` call in the current process.
 2. The `BLUEQAT_API_KEY` environment variable.
 3. The config file `~/.blueqat/config.json` (written by `save_api_key`,
