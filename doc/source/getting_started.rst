@@ -1,196 +1,69 @@
+Getting started
 ===============
-Getting Started
-===============
 
-Prerequisites
-=============
-
-- Python3
-- numpy
-- scipy
-
-Install
-=======
-
-.. code-block:: bash
-
-    $ git clone https://github.com/Blueqat/Blueqat
-    $ cd blueqat
-    $ pip3 install -e .
-
-or
-
-.. code-block:: bash
-
-    $ pip3 install blueqat
-
-
-Basics
-======
-
-Circuit
--------
-
-.. code-block:: python
-
-    from blueqat import Circuit
-    import math
-
-    # number of qubit is not specified
-    c = Circuit()
-
-    #if you want to specify the number of qubit explicitly
-    c = Circuit(3) # 3 qubits
-
-Method Chain
+Installation
 ------------
 
-.. code-block:: python
+blueqat requires Python 3.11+ and installs PyTorch as its simulation core:
 
-    # write as a single chain
-    Circuit().h[0].x[0].z[0]
+.. code-block:: console
 
-    # in separate lines
-    c = Circuit().h[0]
-    c.x[0].z[0]
+   pip install git+https://github.com/blueqat/blueqatSDK
 
-Index slicing
+For development:
+
+.. code-block:: console
+
+   git clone https://github.com/blueqat/blueqatSDK
+   cd blueqatSDK
+   pip install -e .[dev]
+   pytest tests/ -q
+
+First circuit
 -------------
 
-.. code-block:: python
-
-    Circuit().z[1:3] # Z-gate on 1,2
-    Circuit().x[:3] # X-gate on (0, 1, 2)
-    Circuit().h[:] # H-gate on all qubits
-    Circuit().x[1, 2] # another way to spcefify 1 qubit gate on qubit 1 and 2.
-
-Rotation Gate
--------------
+Circuits are built by method chaining. A gate is selected as an attribute and
+applied to qubits with ``[...]`` indexing:
 
 .. code-block:: python
 
-    Circuit().rz(math.pi / 4)[0]
+   from blueqat import Circuit
 
-Measurement
------------
+   c = Circuit()            # width grows automatically
+   c.h[0]                   # Hadamard on qubit 0
+   c.cx[0, 1]               # CNOT: control 0, target 1
 
-.. code-block:: python
+   # or equivalently, as one chain:
+   c = Circuit().h[0].cx[0, 1]
 
-    Circuit().m[0]
-
-Single shot run
----------------
-
-.. code-block:: python
-
-    Circuit().h[0].cx[0,1].run()
-
-Run(shots=n)
-------------
+Running it returns the statevector as a :class:`torch.Tensor` (qubit 0 is the
+least-significant bit of the state index):
 
 .. code-block:: python
 
-    c = Circuit().h[0].cx[0,1].m[:]
-    c.run(shots=100) # => Counter({'00': 48, '11': 52}) (result may vary due to randomness)
+   c.run()
+   # tensor([0.7071+0.j, 0.0000+0.j, 0.0000+0.j, 0.7071+0.j])
 
-Hamiltonian
------------
-
-.. code-block:: python
-
-    from blueqat.pauli import *
-
-    hamiltonian1 = (1.23 * Z[0] + 4.56 * X[1] * Z[2]) ** 2
-    hamiltonian2 = (2.46 * Y[0] + 5.55 * Z[1] * X[2] * X[1]) ** 2
-    hamiltonian = hamiltonian1 + hamiltonian2
-    print(hamiltonian)
-
-simplify the hamiltonian
+Sampling measurement outcomes instead:
 
 .. code-block:: python
 
-    hamiltonian = hamiltonian.simplify()
-    print(hamiltonian)
+   c.m[:].run(shots=1000)
+   # Counter({'00': 493, '11': 507})
 
-VQE
----
-
-.. code-block:: python
-
-    import numpy as np
-    import scipy.optimize as optimize
-    from blueqat.pauli import X, Y, Z, I
-
-    # hamiltonian
-    hamiltonian = 1.23 * I - 4.56 * X(0) + 2.45 * Y(0) + 2.34 * Z(0)
-    hamiltonian = hamiltonian.to_expr()
-
-    def f(params):
-        params = params
-        return Circuit().rx(params[0])[0].rz(params[1])[0].run(hamiltonian = hamiltonian)
-
-    initial_guess = np.array([np.random.rand()*np.pi*2 for _ in range(2)])
-    optimal_params = optimize.minimize(f, initial_guess, method="Powell", options={"ftol": 5.0e-2, "xtol": 5.0e-2, "maxiter": 1000})
-
-    print(f'Estimated energy by VQE = {f(optimal_params.x)}', )
-
-
-Blueqat to Qiskit
------------------
+Slices apply a gate to many qubits at once:
 
 .. code-block:: python
 
-    import qiskit
-    c = Circuit().h[0].cx[0, 1].m[:]
-    c.run_with_ibmq(shots=100)
+   Circuit(4).h[:]          # H on every qubit
+   Circuit(4).x[1:3]        # X on qubits 1, 2
+   Circuit(4).z[0, 3]       # Z on qubits 0 and 3
 
-Blueqat to QASM
----------------
+Where to go next
+----------------
 
-.. code-block:: python
-
-    c = Circuit().h[0].cx[0, 1]
-    print(c.to_qasm())
-    
-    # OPENQASM 2.0;
-    # include "qelib1.inc";
-    # qreg q[2];
-    # creg c[2];
-    # h q[0];
-    # cx q[0],q[1];
-
-Examples
-========
-
-2-qubit Grover
---------------
-
-.. code-block:: python
-
-    from blueqat import Circuit
-    c = Circuit().h[:2].cz[0,1].h[:].x[:].cz[0,1].x[:].h[:].m[:]
-    c.run(shots=1) # => Counter({'11': 1})
-
-Maxcut QAOA
------------
-
-.. code-block:: python
-
-    from blueqat.pauli import Z
-    from blueqat.utils import qaoa
-
-    edges = [(0, 1), (1, 2), (2, 3), (3, 0), (1, 3), (0, 2), (4, 0), (4, 3)]
-    hamiltonian = sum(Z[e[0]]*Z[e[1]] for e in edges)
-    step = 1
-
-    result = qaoa(hamiltonian, step)
-    b = result.circuit.run(shots=10)
-    sample = b.most_common(1)[0][0]
-
-    print("sample:"+ str(sample))
-    print(
-    """  {4}
-     / \\
-    {0}---{3}
-    | x |
-    {1}---{2}""".format(*b.most_common()[0][0]))
+- :doc:`guide/circuits` -- the full gate set, circuit introspection, QASM.
+- :doc:`guide/backends` -- statevector vs tensornet, shots, large circuits.
+- :doc:`guide/autograd` -- differentiable circuits, VQE and QAOA.
+- :doc:`guide/exchange_only` -- exchange-only spin qubits and pulse
+  compilation.
