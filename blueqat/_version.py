@@ -13,4 +13,4 @@
 # limitations under the License.
 """The version of blueqat."""
 
-__version__: str = "2.0.5"
+__version__: str = "2.1.0"
